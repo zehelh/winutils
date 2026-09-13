@@ -1,0 +1,118 @@
+name: build-winutils
+
+on:
+  workflow_dispatch:
+    inputs:
+      hadoop_ref:
+        description: "Hadoop git ref (default: rel/release-3.4.1)"
+        required: false
+        default: "rel/release-3.4.1"
+        type: string
+      build_mode:
+        description: "native = fast (winutils+dll only), full = complete dist bin"
+        required: false
+        default: "full"
+        type: choice
+        options:
+          - native
+          - full
+permissions:
+  contents: write
+
+env:
+  HADOOP_VERSION: "3.4.1"
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Enable long paths
+        run: git config --system core.longpaths true
+
+      - uses: actions/checkout@v4
+
+      - name: Checkout Apache Hadoop source
+        uses: actions/checkout@v4
+        with:
+          repository: apache/hadoop
+          ref: ${{ inputs.hadoop_ref || 'rel/release-3.4.1' }}
+          path: hadoop-src
+
+      - name: Cache Maven packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2
+          key: ${{ runner.os }}-m2-hadoop-${{ env.HADOOP_VERSION }}-${{ hashFiles('.github/workflows/build-winutils.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-m2-hadoop-${{ env.HADOOP_VERSION }}-
+            ${{ runner.os }}-m2-
+
+      - name: Apply GetFileInformationByName compat shim
+        shell: pwsh
+        working-directory: hadoop-src
+        run: |
+          & "${{ github.workspace }}/scripts/apply-win-compat-shim.ps1" -Workspace "${{ github.workspace }}/hadoop-src"
+
+      - uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: C:\vcpkg\installed
+          key: vcpkg-x64-windows-hadoop-${{ env.HADOOP_VERSION }}-7ffa425
+
+      - name: Setup vcpkg dependencies
+        shell: cmd
+        run: |
+          call scripts\setup-vcpkg.cmd C:\vcpkg
+          echo VCPKG_ROOT=C:\vcpkg>> %GITHUB_ENV%
+          echo PROTOBUF_HOME=C:\vcpkg\installed\x64-windows>> %GITHUB_ENV%
+
+      - name: Build native libs only
+        if: inputs.build_mode == 'native'
+        shell: cmd
+        working-directory: hadoop-src
+        run: |
+          set MAVEN_OPTS=-Xmx2048M -Xss128M
+          mvn package -Pnative-win -DskipTests -Dmaven.javadoc.skip=true -pl :hadoop-common,:hadoop-maven-plugins
+
+      - name: Build full distribution
+        if: inputs.build_mode != 'native'
+        shell: cmd
+        working-directory: hadoop-src
+        run: |
+          set classpath=
+          set MAVEN_OPTS=-Xmx2048M -Xss128M
+          set PROTOBUF_HOME=C:\vcpkg\installed\x64-windows
+          mvn clean package -Dhttps.protocols=TLSv1.2 -DskipTests -DskipDocs -Pnative-win,dist -Drequire.openssl -Drequire.test.libhadoop -Dshell-executable=C:\Program Files\Git\bin\bash.exe -Dtar -Dopenssl.prefix=C:\vcpkg\installed\x64-windows -Dcmake.prefix.path=C:\vcpkg\installed\x64-windows -Dwindows.cmake.toolchain.file=C:\vcpkg\scripts\buildsystems\vcpkg.cmake -Dwindows.cmake.build.type=RelWithDebInfo -Dwindows.build.hdfspp.dll=off -Dwindows.no.sasl=on -Duse.platformToolsetVersion=v143
+
+      - name: Extract binaries to hadoop-3.4.1/bin
+        shell: cmd
+        env:
+          BUILD_MODE: ${{ inputs.build_mode || 'full' }}
+        run: |
+          if "%BUILD_MODE%"=="native" (
+            call scripts\extract-to-winutils.cmd native hadoop-src
+          ) else (
+            call scripts\extract-to-winutils.cmd full hadoop-src
+          )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadoop-${{ env.HADOOP_VERSION }}-winutils
+          path: hadoop-${{ env.HADOOP_VERSION }}/bin/
+          retention-days: 90
+
+      - name: Create release zip
+        shell: pwsh
+        run: |
+          $zip = "${{ github.workspace }}/hadoop-${{ env.HADOOP_VERSION }}-winutils.zip"
+          Compress-Archive -Path "${{ github.workspace }}/hadoop-${{ env.HADOOP_VERSION }}/bin/*" -DestinationPath $zip -Force
+
+      - name: Upload release zip artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadoop-${{ env.HADOOP_VERSION }}-winutils-zip
+          path: hadoop-${{ env.HADOOP_VERSION }}-winutils.zip
+          retention-days: 90

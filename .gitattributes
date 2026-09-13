@@ -1,0 +1,9 @@
+* text=auto eol=crlf
+*.sh text eol=lf
+*.bash text eol=lf
+*.dll binary
+*.exe binary
+*.lib binary
+*.exp binary
+*.pdb binary
+*.zip binary

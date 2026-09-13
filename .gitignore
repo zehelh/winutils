@@ -1,17 +1,3 @@
-# Build workspace
-build/
 hadoop-src/
-.m2/
+.cache/
 *.log
-
-# Maven / Hadoop build outputs (when building locally on Windows)
-**/target/
-
-# Downloaded archives
-*.tar.gz
-*.zip.tmp
-
-# IDE
-.idea/
-.vscode/
-*.swp

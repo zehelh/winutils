@@ -1,0 +1,14 @@
+winutils
+Copyright 2026 zehelh
+
+This repository contains build scripts and configuration to produce Windows
+binaries from Apache Hadoop source releases.
+
+The contents of hadoop-<version>/bin/ (winutils.exe, hadoop.dll, scripts, etc.)
+are compiled from Apache Hadoop and are licensed under the Apache License,
+Version 2.0 by the Apache Software Foundation. See hadoop-<version>/LICENSE
+and hadoop-<version>/NOTICE for the terms and attributions that apply to those
+binaries.
+
+The build scripts in this repository (build.sh, docker/, versions.conf, etc.)
+are also licensed under the Apache License, Version 2.0.

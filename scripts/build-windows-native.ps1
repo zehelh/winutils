@@ -191,6 +191,14 @@ $GitRef = Resolve-GitRef $HadoopVersion
 Write-Host "Git ref: $GitRef"
 
 Clone-Hadoop $GitRef
+$bash = $env:SHELL_EXECUTABLE
+if (-not $bash) { $bash = (Find-GitBash) }
+if ($bash) {
+    & $bash (Join-Path $ScriptDir "patch-hadoop-winutils-sdk.sh") $HadoopSrc
+} else {
+    Write-Warning "[patch] Git Bash not found - skipping SDK patch script"
+}
+
 Setup-Vcpkg
 
 if (-not $SkipMaven) { Invoke-MavenNative }

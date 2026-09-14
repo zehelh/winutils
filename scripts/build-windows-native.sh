@@ -186,6 +186,7 @@ echo "[win] JAVA_HOME=${JAVA_HOME}"
 java -version
 
 clone_hadoop
+bash "${REPO_ROOT}/scripts/patch-hadoop-winutils-sdk.sh" "${HADOOP_SRC}"
 setup_vcpkg
 run_maven_native
 

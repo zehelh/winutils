@@ -88,6 +88,8 @@ RUN=(docker run --rm
   -v "${REPO_ROOT}/docker:/docker:ro"
   -v "${REPO_ROOT}/docker/build-in-container.sh:/docker/build-in-container.sh:ro"
   -v "${REPO_ROOT}/docker/assemble-from-release.sh:/docker/assemble-from-release.sh:ro"
+  -v "${REPO_ROOT}/docker/overlay-native-bin.sh:/docker/overlay-native-bin.sh:ro"
+  -v "${REPO_ROOT}/docker/verify-cdarlint-bin.sh:/docker/verify-cdarlint-bin.sh:ro"
   -v "${REPO_ROOT}/docker/entrypoint.sh:/opt/entrypoint.sh:ro"
   -v "${REPO_ROOT}/docker/msbuild-wine.sh:/usr/local/bin/msbuild:ro"
   -v "${REPO_ROOT}/versions.conf:/src/versions.conf:ro"
@@ -99,7 +101,7 @@ RUN=(docker run --rm
   -e MAVEN_REPO=/root/.m2/repository
   -e HADOOP_VERSION="${HADOOP_VERSION}"
   -e HADOOP_GIT_REF="${HADOOP_GIT_REF}"
-  -e HADOOP_DIST_PROFILE="$([[ "${DIST_FULL}" -eq 1 ]] && echo full || echo windows-client)"
+  -e HADOOP_DIST_PROFILE="$([[ "${DIST_FULL}" -eq 1 ]] && echo full || echo lite)"
 )
 
 fix_owner() {

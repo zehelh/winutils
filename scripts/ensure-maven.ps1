@@ -5,13 +5,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$_caller = $MyInvocation.MyCommand.Path
+if ($_caller) {
+    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
+    Initialize-WinutilsPaths -CallerPath $_caller
+}
 
 if (Get-Command mvn.cmd -ErrorAction SilentlyContinue) {
     Write-Host "[maven] Already on PATH: $(mvn -version | Select-Object -First 1)"
     return
 }
 
-$toolRoot = if ($env:RUNNER_TOOL_CACHE) { $env:RUNNER_TOOL_CACHE } else { Join-Path (Split-Path $PSScriptRoot -Parent) ".cache" }
+$repoRoot = if ($script:WinutilsRepoRoot) { $script:WinutilsRepoRoot } else { Split-Path -LiteralPath (Split-Path -LiteralPath $_caller -Parent) -Parent }
+$toolRoot = if ($env:RUNNER_TOOL_CACHE) { $env:RUNNER_TOOL_CACHE } else { Join-Path $repoRoot ".cache" }
 $mavenHome = Join-Path $toolRoot "maven-$MavenVersion"
 $mvnCmd = Join-Path $mavenHome "bin\mvn.cmd"
 

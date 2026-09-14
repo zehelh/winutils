@@ -22,7 +22,18 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$RepoRoot = Split-Path $PSScriptRoot -Parent
+$_caller = $MyInvocation.MyCommand.Path
+if ($_caller) {
+    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
+    Initialize-WinutilsPaths -CallerPath $_caller
+} elseif (Test-Path -LiteralPath (Join-Path (Get-Location).Path "scripts\ps-paths.ps1")) {
+    . (Join-Path (Get-Location).Path "scripts\ps-paths.ps1")
+    Initialize-WinutilsPaths
+} else {
+    throw "Run: pwsh -File scripts/build-windows-native.ps1"
+}
+$RepoRoot = $script:WinutilsRepoRoot
+$ScriptDir = $script:WinutilsScriptDir
 $VersionsFile = Join-Path $RepoRoot "versions.conf"
 $HadoopHome = Join-Path $RepoRoot "hadoop-$HadoopVersion"
 $RefFile = Join-Path $RepoRoot ".hadoop-src-ref"
@@ -44,7 +55,7 @@ function Enable-LongPaths {
 }
 
 function Import-VsDevEnvironment {
-    & (Join-Path $PSScriptRoot "setup-msvc-env.ps1")
+    & (Join-Path $ScriptDir "setup-msvc-env.ps1")
 }
 
 function Resolve-GitRef([string]$Version) {
@@ -165,7 +176,7 @@ Write-Host "Output:     $HadoopHome"
 Write-Host "Profile:    $DistProfile"
 
 Import-VsDevEnvironment
-& (Join-Path $PSScriptRoot "ensure-maven.ps1")
+& (Join-Path $ScriptDir "ensure-maven.ps1")
 
 if ($JavaHome) { $env:JAVA_HOME = $JavaHome }
 if (-not $env:JAVA_HOME) {
@@ -204,7 +215,7 @@ foreach ($pair in @(
 
 if (-not $SkipAssemble) {
     Write-Step "Assemble HADOOP_HOME"
-    & (Join-Path $PSScriptRoot "assemble-from-release.ps1") `
+    & (Join-Path $ScriptDir "assemble-from-release.ps1") `
         -HadoopVersion $HadoopVersion `
         -HadoopHome $HadoopHome `
         -CommonBin $CommonBin `

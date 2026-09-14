@@ -9,9 +9,15 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$_caller = $MyInvocation.MyCommand.Path
+if ($_caller) {
+    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
+    Initialize-WinutilsPaths -CallerPath $_caller
+}
 
 if (-not $CacheDir) {
-    $CacheDir = Join-Path (Split-Path $PSScriptRoot -Parent) ".cache\hadoop-releases"
+    $repoRoot = if ($script:WinutilsRepoRoot) { $script:WinutilsRepoRoot } else { Split-Path -LiteralPath (Split-Path -LiteralPath $_caller -Parent) -Parent }
+    $CacheDir = Join-Path $repoRoot ".cache\hadoop-releases"
 }
 
 $Tarball = "hadoop-$HadoopVersion.tar.gz"

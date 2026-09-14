@@ -6,6 +6,9 @@ HADOOP_VERSION="${1:?HADOOP_VERSION requis}"
 HADOOP_HOME="${2:?HADOOP_HOME requis}"
 NATIVE_BIN="${3:?NATIVE_BIN (target/bin natif) requis}"
 CACHE_DIR="${4:-/src/.cache/hadoop-releases}"
+# windows-client (defaut) : allège pour PySpark / hadoop.cmd classpath --glob
+# full : release Apache integrale (~1,7 Go)
+DIST_PROFILE="${HADOOP_DIST_PROFILE:-windows-client}"
 
 TARBALL="hadoop-${HADOOP_VERSION}.tar.gz"
 TARBALL_PATH="${CACHE_DIR}/${TARBALL}"
@@ -75,6 +78,51 @@ tar -xzf "${TARBALL_PATH}" -C "${PARENT_DIR}"
 echo "[assemble] Overlay binaires natifs dans bin/"
 cp -f "${NATIVE_BIN}/winutils.exe" "${NATIVE_BIN}/hadoop.dll" "${HADOOP_HOME}/bin/"
 
+trim_windows_client() {
+  local before after saved
+  before="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
+
+  echo "[assemble] Allègement profil windows-client..."
+  rm -rf \
+    "${HADOOP_HOME}/share/doc" \
+    "${HADOOP_HOME}/share/hadoop/tools" \
+    "${HADOOP_HOME}/share/hadoop/client" \
+    "${HADOOP_HOME}/lib/native" \
+    "${HADOOP_HOME}/lib" \
+    "${HADOOP_HOME}/include" \
+    "${HADOOP_HOME}/sbin" \
+    "${HADOOP_HOME}/licenses-binary" \
+    "${HADOOP_HOME}/share/hadoop/common/jdiff" \
+    "${HADOOP_HOME}/share/hadoop/common/sources" \
+    "${HADOOP_HOME}/share/hadoop/hdfs/sources" \
+    "${HADOOP_HOME}/share/hadoop/yarn/sources" \
+    "${HADOOP_HOME}/share/hadoop/yarn/webapps" \
+    "${HADOOP_HOME}/share/hadoop/yarn/test" \
+    "${HADOOP_HOME}/share/hadoop/mapreduce/sources"
+
+  rm -f \
+    "${HADOOP_HOME}/bin/container-executor" \
+    "${HADOOP_HOME}/bin/test-container-executor" \
+    "${HADOOP_HOME}/bin/oom-listener" \
+    "${HADOOP_HOME}/bin/hadoop" \
+    "${HADOOP_HOME}/bin/hdfs" \
+    "${HADOOP_HOME}/bin/yarn" \
+    "${HADOOP_HOME}/bin/mapred"
+
+  after="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
+  saved=$(( (before - after) / 1024 / 1024 ))
+  echo "[assemble] Profil windows-client: ~${saved} Mo retires"
+}
+
+case "${DIST_PROFILE}" in
+  windows-client) trim_windows_client ;;
+  full) echo "[assemble] Profil full: release Apache non allégée" ;;
+  *)
+    echo "[assemble] Erreur: HADOOP_DIST_PROFILE inconnu: ${DIST_PROFILE} (windows-client|full)" >&2
+    exit 1
+    ;;
+esac
+
 for req in \
   "${HADOOP_HOME}/libexec/hadoop-config.cmd" \
   "${HADOOP_HOME}/etc/hadoop/core-site.xml" \
@@ -92,4 +140,5 @@ if ! compgen -G "${HADOOP_HOME}/share/hadoop/hdfs/hadoop-hdfs-${HADOOP_VERSION}.
   echo "[assemble] Avertissement: jar hdfs absent (classpath hdfs limite)" >&2
 fi
 
-echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (release Apache + natif Wine)"
+size_human="$(du -sh "${HADOOP_HOME}" | awk '{print $1}')"
+echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (${DIST_PROFILE}, ${size_human}, release + natif Wine)"

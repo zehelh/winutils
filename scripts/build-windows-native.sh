@@ -20,7 +20,8 @@ fi
 HADOOP_HOME="${REPO_ROOT}/hadoop-${HADOOP_VERSION}"
 REF_FILE="${REPO_ROOT}/.hadoop-src-ref"
 VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
-VCPKG_COMMIT="${VCPKG_COMMIT:-7ffa425e1db8b0c3edf9c50f2f3a0f25a324541d}"
+# Native Windows: recent vcpkg (VS 2022). Docker/Wine keeps 7ffa425 in docker/Dockerfile.
+VCPKG_COMMIT="${VCPKG_COMMIT:-2024.12.16}"
 CACHE_DIR="${REPO_ROOT}/.cache/hadoop-releases"
 
 resolve_git_ref() {
@@ -76,13 +77,38 @@ clone_hadoop() {
   }
 }
 
-setup_vcpkg() {
+ensure_vcpkg_repo() {
+  if [[ -d "${VCPKG_ROOT}/.git" ]]; then
+    echo "[win] vcpkg repo: updating to ${VCPKG_COMMIT}"
+    git -C "${VCPKG_ROOT}" fetch --tags --depth 1 origin 2>/dev/null || true
+    if ! git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}" 2>/dev/null; then
+      echo "[win] vcpkg checkout failed - re-cloning"
+      rm -rf "${VCPKG_ROOT}"
+    fi
+  fi
   if [[ ! -d "${VCPKG_ROOT}/.git" ]]; then
     echo "[win] Cloning vcpkg ${VCPKG_COMMIT}"
-    git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
-    git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}"
-    cmd //c "${VCPKG_ROOT}\\bootstrap-vcpkg.bat" -disableMetrics
+    if ! git clone --depth 1 --branch "${VCPKG_COMMIT}" \
+      https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}" 2>/dev/null; then
+      git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
+      git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}"
+    fi
   fi
+}
+
+bootstrap_vcpkg() {
+  if [[ -f "${VCPKG_ROOT}/vcpkg.exe" ]]; then
+    return 0
+  fi
+  echo "[win] Bootstrapping vcpkg (VS 2022 / MSVC required)"
+  powershell.exe -NoProfile -ExecutionPolicy Bypass \
+    -File "${REPO_ROOT}/scripts/bootstrap-vcpkg.ps1" \
+    -VcpkgRoot "${VCPKG_ROOT}"
+}
+
+setup_vcpkg() {
+  ensure_vcpkg_repo
+  bootstrap_vcpkg
 
   local marker="${VCPKG_ROOT}/installed/x64-windows/include/boost/version.hpp"
   if [[ ! -f "${marker}" ]]; then

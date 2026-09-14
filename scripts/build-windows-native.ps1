@@ -33,7 +33,7 @@ $VersionsFile = Join-Path $RepoRoot "versions.conf"
 $HadoopHome = Join-Path $RepoRoot "hadoop-$HadoopVersion"
 $RefFile = Join-Path $RepoRoot ".hadoop-src-ref"
 $CacheDir = Join-Path $RepoRoot ".cache\hadoop-releases"
-$VcpkgCommit = "7ffa425e1db8b0c3edf9c50f2f3a0f25a324541d"
+$VcpkgCommit = if ($env:VCPKG_COMMIT) { $env:VCPKG_COMMIT } else { "2024.12.16" }
 if (-not $VcpkgRoot) { $VcpkgRoot = Join-Path $RepoRoot ".cache\vcpkg" }
 
 function Write-Step([string]$Msg) { Write-Host "`n=== $Msg ===" -ForegroundColor Cyan }
@@ -101,7 +101,7 @@ function Setup-Vcpkg {
     if (-not (Test-Path (Join-Path $VcpkgRoot ".git"))) {
         git clone https://github.com/microsoft/vcpkg.git $VcpkgRoot
         git -C $VcpkgRoot checkout $VcpkgCommit
-        & (Join-Path $VcpkgRoot "bootstrap-vcpkg.bat") -disableMetrics
+        & (Join-Path $ScriptDir "bootstrap-vcpkg.ps1") -VcpkgRoot $VcpkgRoot
     }
     $marker = Join-Path $VcpkgRoot "installed\x64-windows\include\boost\version.hpp"
     if (-not (Test-Path $marker)) {

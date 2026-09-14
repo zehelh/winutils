@@ -99,6 +99,7 @@ jobs:
           HADOOP_SRC: C:/hadoop-src
           HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
           VCPKG_ROOT: C:/vcpkg
+          VCPKG_COMMIT: "2024.12.16"
         run: |
           & "${{ github.workspace }}/scripts/run-build-native.ps1" -HadoopVersion "${{ inputs.hadoop_version }}"
 

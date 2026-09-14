@@ -26,7 +26,8 @@ if [[ "${#missing[@]}" -gt 0 ]]; then
 fi
 
 if [[ "${REQUIRE_HDFS_DLL}" == "1" && ! -f "${HADOOP_BIN}/hdfs.dll" ]]; then
-  echo "[verify] Avertissement: hdfs.dll absent (libhdfs natif non compile)" >&2
+  echo "[verify] Erreur: hdfs.dll absent (LoadLibrary/libhdfs)" >&2
+  exit 1
 fi
 
 echo "[verify] bin/ OK (cdarlint + scripts release)"

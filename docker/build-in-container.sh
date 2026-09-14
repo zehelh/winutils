@@ -75,6 +75,7 @@ clone_hadoop() {
 
   git -C "${HADOOP_SRC}" config core.longpaths true
   patch_hadoop_for_wine "${HADOOP_SRC}"
+  bash /docker/patch-hadoop-jni-wine.sh "${HADOOP_SRC}"
 }
 
 vcpkg_to_win() {
@@ -117,26 +118,8 @@ run_maven() {
 HDFS_NATIVE_BIN="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/target/bin"
 
 build_hdfs_native() {
-  local vcpkg_win toolchain_win
-  vcpkg_win=$(vcpkg_to_win "${VCPKG_ROOT}")
-  toolchain_win="${vcpkg_win}\\scripts\\buildsystems\\vcpkg.cmake"
-
-  echo "[build] Maven: hdfs-native-client (hdfs.dll, experimental Wine)"
-  if mvn package \
-    -rf :hadoop-hdfs-native-client \
-    -Pnative-win \
-    "${maven_common_flags[@]}" \
-    -Drequire.openssl \
-    -Dopenssl.prefix="${vcpkg_win}\\installed\\x64-windows" \
-    -Dcmake.prefix.path="${vcpkg_win}\\installed\\x64-windows" \
-    -Dwindows.cmake.toolchain.file="${toolchain_win}" \
-    -Dwindows.cmake.build.type=RelWithDebInfo \
-    -Dwindows.build.hdfspp.dll=off -Dwindows.no.sasl=on \
-    -Duse.platformToolsetVersion=v145; then
-    [[ -f "${HDFS_NATIVE_BIN}/hdfs.dll" ]] && echo "[build] hdfs.dll OK"
-  else
-    echo "[build] Avertissement: hdfs.dll non compile (cmake/VS sous Wine)" >&2
-  fi
+  echo "[build] hdfs.dll (libhdfs via CMake/Ninja Wine)"
+  bash /docker/build-hdfs-dll.sh
 }
 
 assemble_dist() {

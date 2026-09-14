@@ -21,17 +21,12 @@ param(
     [switch]$SkipAssemble
 )
 
+#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
-$_caller = $MyInvocation.MyCommand.Path
-if ($_caller) {
-    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
-    Initialize-WinutilsPaths -CallerPath $_caller
-} elseif (Test-Path -LiteralPath (Join-Path (Get-Location).Path "scripts\ps-paths.ps1")) {
-    . (Join-Path (Get-Location).Path "scripts\ps-paths.ps1")
-    Initialize-WinutilsPaths
-} else {
-    throw "Run: pwsh -File scripts/build-windows-native.ps1"
-}
+$_this = $MyInvocation.MyCommand.Path
+if (-not $_this) { throw "Run: .\scripts\build-windows-native.ps1" }
+. (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
+Initialize-WinutilsPaths -CallerPath $_this
 $RepoRoot = $script:WinutilsRepoRoot
 $ScriptDir = $script:WinutilsScriptDir
 $VersionsFile = Join-Path $RepoRoot "versions.conf"

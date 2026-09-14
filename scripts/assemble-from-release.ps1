@@ -8,15 +8,19 @@ param(
     [ValidateSet("lite", "full", "windows-client")][string]$DistProfile = "lite"
 )
 
+#Requires -Version 5.1
 $ErrorActionPreference = "Stop"
-$_caller = $MyInvocation.MyCommand.Path
-if ($_caller) {
-    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
-    Initialize-WinutilsPaths -CallerPath $_caller
+$_this = $MyInvocation.MyCommand.Path
+if ($_this) {
+    . (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
+    Initialize-WinutilsPaths -CallerPath $_this
 }
 
 if (-not $CacheDir) {
-    $repoRoot = if ($script:WinutilsRepoRoot) { $script:WinutilsRepoRoot } else { Split-Path -LiteralPath (Split-Path -LiteralPath $_caller -Parent) -Parent }
+    $repoRoot = $script:WinutilsRepoRoot
+    if (-not $repoRoot -and $_this) {
+        $repoRoot = Split-Path -Path (Split-Path -Path $_this -Parent) -Parent
+    }
     $CacheDir = Join-Path $repoRoot ".cache\hadoop-releases"
 }
 

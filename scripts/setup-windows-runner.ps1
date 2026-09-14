@@ -1,22 +1,15 @@
 # Prepare a Windows self-hosted runner (or GHA job) for native Hadoop builds.
+#Requires -Version 5.1
 param(
     [switch]$ExportToGitHubEnv,
     [switch]$SkipJavaCheck
 )
 
 $ErrorActionPreference = "Stop"
-$_caller = $MyInvocation.MyCommand.Path
-if ($_caller) {
-    $_scriptDir = Split-Path -LiteralPath $_caller -Parent
-} elseif ($PSScriptRoot) {
-    $_scriptDir = $PSScriptRoot
-} elseif (Test-Path -LiteralPath (Join-Path (Get-Location).Path "scripts\ps-paths.ps1")) {
-    $_scriptDir = Join-Path (Get-Location).Path "scripts"
-} else {
-    throw "Run from repo root: pwsh -File scripts/setup-windows-runner.ps1"
-}
-. (Join-Path $_scriptDir "ps-paths.ps1")
-Initialize-WinutilsPaths -CallerPath $_caller
+$_this = $MyInvocation.MyCommand.Path
+if (-not $_this) { throw "Run: .\scripts\setup-windows-runner.ps1" }
+. (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
+Initialize-WinutilsPaths -CallerPath $_this
 
 Write-Host "=== Windows runner setup ==="
 Write-Host "Repo: $script:WinutilsRepoRoot"
@@ -43,7 +36,7 @@ $bashCandidates = @(
 )
 $bash = $bashCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
 if (-not $bash) {
-    throw "[toolchain] Git Bash not found. Install Git for Windows: winget install Git.Git"
+    throw "[toolchain] Git Bash not found. Install: winget install Git.Git"
 }
 Write-Host "[toolchain] bash: $bash"
 
@@ -52,7 +45,7 @@ if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
 }
 
 if (-not (Get-Command gh.exe -ErrorAction SilentlyContinue)) {
-    Write-Warning "[toolchain] gh CLI not found - install with: winget install GitHub.cli (or set create_release: false)"
+    Write-Warning "[toolchain] gh CLI not found - optional: winget install GitHub.cli"
 }
 
 Write-Host "=== Toolchain verification ==="
@@ -66,7 +59,7 @@ if (-not $SkipJavaCheck -and -not (Get-Command java -ErrorAction SilentlyContinu
     if ($ExportToGitHubEnv) {
         throw "[toolchain] Missing: java (setup-java should run before this step in GHA)"
     }
-    Write-Warning "[toolchain] java not on PATH - OK for MSVC check; GHA installs JDK via setup-java"
+    Write-Warning "[toolchain] java not on PATH - OK for MSVC check only"
 } elseif (Get-Command java -ErrorAction SilentlyContinue) {
     java -version
 }

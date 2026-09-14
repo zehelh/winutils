@@ -1,22 +1,22 @@
-# Install Apache Maven into RUNNER_TOOL_CACHE (or .cache/maven) if not on PATH.
+# Install Apache Maven into RUNNER_TOOL_CACHE (or .cache) if not on PATH.
+#Requires -Version 5.1
 param(
     [string]$MavenVersion = "3.9.9",
     [switch]$ExportToGitHubEnv
 )
 
 $ErrorActionPreference = "Stop"
-$_caller = $MyInvocation.MyCommand.Path
-if ($_caller) {
-    . (Join-Path (Split-Path -LiteralPath $_caller -Parent) "ps-paths.ps1")
-    Initialize-WinutilsPaths -CallerPath $_caller
-}
+$_this = $MyInvocation.MyCommand.Path
+if (-not $_this) { throw "Run via setup-windows-runner.ps1 or build-windows-native.ps1" }
+. (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
+Initialize-WinutilsPaths -CallerPath $_this
 
 if (Get-Command mvn.cmd -ErrorAction SilentlyContinue) {
     Write-Host "[maven] Already on PATH: $(mvn -version | Select-Object -First 1)"
     return
 }
 
-$repoRoot = if ($script:WinutilsRepoRoot) { $script:WinutilsRepoRoot } else { Split-Path -LiteralPath (Split-Path -LiteralPath $_caller -Parent) -Parent }
+$repoRoot = $script:WinutilsRepoRoot
 $toolRoot = if ($env:RUNNER_TOOL_CACHE) { $env:RUNNER_TOOL_CACHE } else { Join-Path $repoRoot ".cache" }
 $mavenHome = Join-Path $toolRoot "maven-$MavenVersion"
 $mvnCmd = Join-Path $mavenHome "bin\mvn.cmd"

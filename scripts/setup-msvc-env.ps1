@@ -1,4 +1,5 @@
 # Load Visual Studio 2022 MSVC environment (cl, link, msbuild).
+#Requires -Version 5.1
 # With -ExportToGitHubEnv, persists variables for subsequent GitHub Actions steps.
 param([switch]$ExportToGitHubEnv)
 

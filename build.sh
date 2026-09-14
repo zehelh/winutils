@@ -6,18 +6,21 @@ VERSIONS_FILE="${REPO_ROOT}/versions.conf"
 IMAGE_NAME="winutils-hadoop-wine-msvc"
 REBUILD=0
 SHELL_ONLY=0
+DIST_FULL=0
 HADOOP_VERSION=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --rebuild-image) REBUILD=1; shift ;;
     --shell) SHELL_ONLY=1; shift ;;
+    --full) DIST_FULL=1; shift ;;
     -h|--help)
       cat <<EOF
 Usage: ./build.sh [VERSION] [options]
 
   VERSION           Version Hadoop (defaut: 3.4.1). Voir versions.conf.
   --rebuild-image   Reconstruit l'image Docker
+  --full            Release Apache complete (~1,7 Go), sans allègement
   --shell           Shell interactif dans le conteneur
   -h, --help        Affiche cette aide
 EOF
@@ -96,6 +99,7 @@ RUN=(docker run --rm
   -e MAVEN_REPO=/root/.m2/repository
   -e HADOOP_VERSION="${HADOOP_VERSION}"
   -e HADOOP_GIT_REF="${HADOOP_GIT_REF}"
+  -e HADOOP_DIST_PROFILE="$([[ "${DIST_FULL}" -eq 1 ]] && echo full || echo windows-client)"
 )
 
 fix_owner() {

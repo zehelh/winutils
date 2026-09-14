@@ -1,6 +1,0 @@
-hadoop_version=3.4.1
-hadoop_git_ref=rel/release-3.4.1
-jdk_major=17
-jdk_linux=/usr/lib/jvm/java-17-openjdk-amd64
-jdk_win_temurin=jdk-17.0.13+11
-runtime_note=Use Temurin 17 x64 Windows (same major as jdk_win_temurin)

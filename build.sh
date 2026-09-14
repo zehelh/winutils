@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
 VERSIONS_FILE="${REPO_ROOT}/versions.conf"
 IMAGE_NAME="winutils-hadoop-wine-msvc"
 REBUILD=0
@@ -77,10 +77,11 @@ else
   echo "[build] Image ${IMAGE_NAME}"
 fi
 
-M2="${HOME}/.m2"
+MAVEN_CACHE="${HOME:-}/.m2"
+[[ -n "${HOME}" ]] || MAVEN_CACHE="${REPO_ROOT}/.cache/m2"
 VCPKG_CACHE="${REPO_ROOT}/.cache/vcpkg-installed"
 HADOOP_RELEASE_CACHE="${REPO_ROOT}/.cache/hadoop-releases"
-mkdir -p "${M2}" "${VCPKG_CACHE}" "${HADOOP_RELEASE_CACHE}"
+mkdir -p "${MAVEN_CACHE}" "${VCPKG_CACHE}" "${HADOOP_RELEASE_CACHE}"
 DEST="${REPO_ROOT}/hadoop-${HADOOP_VERSION}/bin"
 
 RUN=(docker run --rm
@@ -98,7 +99,7 @@ RUN=(docker run --rm
   -v "${REPO_ROOT}/docker/entrypoint.sh:/opt/entrypoint.sh:ro"
   -v "${REPO_ROOT}/docker/msbuild-wine.sh:/usr/local/bin/msbuild:ro"
   -v "${REPO_ROOT}/versions.conf:/src/versions.conf:ro"
-  -v "${M2}:/root/.m2/repository"
+  -v "${MAVEN_CACHE}:/root/.m2/repository"
   -v "${VCPKG_CACHE}:/opt/vcpkg/installed"
   -v "${HADOOP_RELEASE_CACHE}:/src/.cache/hadoop-releases"
   -e HOST_UID="$(id -u)"

@@ -6,7 +6,7 @@ ARG VCPKG_COMMIT=7ffa425e1db8b0c3edf9c50f2f3a0f25a324541d
 
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     ca-certificates curl gpg wget python3 msitools git unzip zip tar build-essential \
-    ninja-build pkg-config openjdk-8-jdk maven \
+    ninja-build pkg-config openjdk-17-jdk maven \
     && apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
 RUN mkdir -pm755 /etc/apt/keyrings \
@@ -52,8 +52,10 @@ COPY triplets/ /docker/triplets/
 COPY toolchain-msvc-wine.cmake /docker/toolchain-msvc-wine.cmake
 COPY install-vcpkg-deps.sh /docker/install-vcpkg-deps.sh
 COPY patch-vcpkg.sh /docker/patch-vcpkg.sh
+COPY jdk-env.sh /docker/jdk-env.sh
 COPY setup-jdk-win32-headers.sh /docker/setup-jdk-win32-headers.sh
 COPY setup-jdk-win64.sh /docker/setup-jdk-win64.sh
+COPY verify-build-coherence.sh /docker/verify-build-coherence.sh
 COPY patch-hadoop-jni-wine.sh /docker/patch-hadoop-jni-wine.sh
 COPY build-hdfs-dll.sh /docker/build-hdfs-dll.sh
 COPY assemble-from-release.sh /docker/assemble-from-release.sh
@@ -63,13 +65,13 @@ COPY jdk-win32/ /docker/jdk-win32/
 COPY entrypoint.sh /opt/entrypoint.sh
 COPY build-in-container.sh /opt/build-in-container.sh
 RUN chmod +x /usr/local/bin/msbuild /usr/local/bin/cmd /usr/local/bin/link \
-    /docker/install-vcpkg-deps.sh /docker/patch-vcpkg.sh /docker/setup-jdk-win32-headers.sh \
-    /docker/setup-jdk-win64.sh /docker/patch-hadoop-jni-wine.sh /docker/build-hdfs-dll.sh \
+    /docker/install-vcpkg-deps.sh /docker/patch-vcpkg.sh /docker/jdk-env.sh \
+    /docker/setup-jdk-win32-headers.sh /docker/setup-jdk-win64.sh \
+    /docker/verify-build-coherence.sh /docker/patch-hadoop-jni-wine.sh /docker/build-hdfs-dll.sh \
     /docker/assemble-from-release.sh \
     /docker/overlay-native-bin.sh \
     /docker/verify-cdarlint-bin.sh \
     /docker/link-wine.sh /opt/entrypoint.sh /opt/build-in-container.sh \
-    && bash /docker/setup-jdk-win32-headers.sh \
     && bash /docker/setup-jdk-win64.sh \
     && test -n "$(find /opt/msvc -name MSBuild.exe | head -1)"
 

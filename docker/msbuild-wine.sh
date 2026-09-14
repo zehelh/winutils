@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Wrapper msbuild : convertit les chemins Unix dans /p:... pour midl/cl sous Wine.
+# msbuild wrapper: convert Unix paths in /p:... props for midl/cl under Wine.
 set -euo pipefail
 
 WINE=$(command -v wine64 || command -v wine)
 
-# Chemins Z:/.../ avec slash final : MSBuild exige un séparateur, sans backslash avant ".
+# Z:/.../ paths with trailing slash: MSBuild requires a separator, no backslash before ".
 to_msbuild_path() {
   local p="$1"
   if [[ "$p" != /* ]]; then

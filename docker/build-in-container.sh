@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HADOOP_VERSION="${HADOOP_VERSION:?HADOOP_VERSION requis}"
-HADOOP_GIT_REF="${HADOOP_GIT_REF:?HADOOP_GIT_REF requis}"
+HADOOP_VERSION="${HADOOP_VERSION:?HADOOP_VERSION required}"
+HADOOP_GIT_REF="${HADOOP_GIT_REF:?HADOOP_GIT_REF required}"
 
 REPO_ROOT="/src"
 HADOOP_SRC="${REPO_ROOT}/hadoop-src"
@@ -11,7 +11,7 @@ DEST="${HADOOP_HOME}/bin"
 VCPKG_ROOT="/opt/vcpkg"
 MAVEN_REPO="${MAVEN_REPO:-/root/.m2/repository}"
 
-# Volume monte depuis l'hote : git refuse les depots au proprietaire different (conteneur only).
+# Host-mounted volume: git rejects repos owned by a different user (container only).
 git config --global --add safe.directory '*' 2>/dev/null || true
 
 export WINEDEBUG=-all
@@ -24,7 +24,7 @@ export PATH="/usr/local/bin:/opt/msvc/bin/x64:${PATH}"
 
 "${WINE}" wineboot -i >/dev/null 2>&1 || true
 
-# Desktop Wine persistant : evite les blocages MSBuild/mspdbsrv sur pipes herites.
+# Persistent Wine desktop: avoids MSBuild/mspdbsrv pipe deadlocks on inherited handles.
 nohup env WINEDEBUG=-all "${WINE}" explorer /desktop=winutils_build,800x600 \
   >/dev/null 2>&1 </dev/null &
 desktop_pid=$!
@@ -43,7 +43,7 @@ patch_hadoop_for_wine() {
   local cfg="${win}/config.cpp"
   local hdr="${win}/include/winutils.h"
 
-  # SDK Windows 10.0.26100+ expose GetFileInformationByName dans winbase.h.
+  # Windows SDK 10.0.26100+ exposes GetFileInformationByName in winbase.h.
   if [[ -f "${hdr}" ]] && grep -q 'DWORD GetFileInformationByName' "${hdr}"; then
     local f
     for f in "${hdr}" "${win}/libwinutils.c" "${win}/ls.c" "${win}/hardlink.c" "${win}/chmod.c"; do
@@ -51,26 +51,40 @@ patch_hadoop_for_wine() {
     done
   fi
 
-  # MSVC recent : "final" est un mot-clé C++11, conflit avec #import msxml6.
+  # Recent MSVC: "final" is a C++11 keyword, conflicts with #import msxml6.
   if [[ -f "${cfg}" ]] && ! grep -q 'rename("final"' "${cfg}"; then
     sed -i 's|#import "msxml6.dll" exclude("ISequentialStream", "_FILETIME")|#import "msxml6.dll" exclude("ISequentialStream", "_FILETIME") rename("final", "schemaFinal")|' "${cfg}"
   fi
 }
 
+hadoop_src_version() {
+  grep -m1 '<version>' "${HADOOP_SRC}/pom.xml" | sed 's|.*<version>\([^<]*\)</version>.*|\1|' | tr -d '[:space:]'
+}
+
 clone_hadoop() {
   local ref_file="${HADOOP_SRC}/.winutils-ref"
-  local cached_ref=""
+  local cached_ref="" src_ver=""
   [[ -f "${ref_file}" ]] && cached_ref="$(cat "${ref_file}")"
+  [[ -f "${HADOOP_SRC}/pom.xml" ]] && src_ver="$(hadoop_src_version)"
 
-  # Clone shallow : un fetch/checkout entre tags echoue souvent (pathspec inconnu).
-  if [[ -f "${HADOOP_SRC}/pom.xml" && "${cached_ref}" == "${HADOOP_GIT_REF}" ]]; then
-    echo "[build] Sources Hadoop deja sur ${HADOOP_GIT_REF}"
+  # Re-clone if git ref OR pom version diverges (e.g. hadoop-src 3.4.3 + build 3.4.1).
+  if [[ -f "${HADOOP_SRC}/pom.xml" && "${cached_ref}" == "${HADOOP_GIT_REF}" && "${src_ver}" == "${HADOOP_VERSION}" ]]; then
+    echo "[build] Hadoop sources already at ${HADOOP_GIT_REF} (${HADOOP_VERSION})"
   else
-    echo "[build] Clone Hadoop ${HADOOP_GIT_REF}"
+    if [[ -n "${src_ver}" && "${src_ver}" != "${HADOOP_VERSION}" ]]; then
+      echo "[build] Re-cloning: sources ${src_ver} != build ${HADOOP_VERSION}" >&2
+    fi
+    echo "[build] Cloning Hadoop ${HADOOP_GIT_REF} (target ${HADOOP_VERSION})"
     rm -rf "${HADOOP_SRC}"
     git clone --depth 1 --branch "${HADOOP_GIT_REF}" \
       https://github.com/apache/hadoop.git "${HADOOP_SRC}"
     echo "${HADOOP_GIT_REF}" > "${ref_file}"
+    src_ver="$(hadoop_src_version)"
+  fi
+
+  if [[ "${src_ver}" != "${HADOOP_VERSION}" ]]; then
+    echo "[build] Error: source version ${src_ver} != ${HADOOP_VERSION}" >&2
+    exit 1
   fi
 
   git -C "${HADOOP_SRC}" config core.longpaths true
@@ -95,13 +109,11 @@ run_maven() {
   vcpkg_win=$(vcpkg_to_win "${VCPKG_ROOT}")
   toolchain_win="${vcpkg_win}\\scripts\\buildsystems\\vcpkg.cmake"
 
-  export JAVA_HOME=/usr/lib/jvm/java-8-openjdk-amd64
   export MAVEN_OPTS="-Xmx2048M -Xss128M -Dmaven.repo.local=${MAVEN_REPO}"
-  export PATH="${JAVA_HOME}/bin:${PATH}"
 
   cd "${HADOOP_SRC}"
 
-  echo "[build] Maven: hadoop-common (native-win uniquement)"
+  echo "[build] Maven: hadoop-common (native-win only)"
   mvn clean package \
     -pl hadoop-common-project/hadoop-common -am \
     -Pnative-win \
@@ -119,7 +131,7 @@ HDFS_NATIVE_BIN="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/tar
 
 build_hdfs_native() {
   echo "[build] hdfs.dll (libhdfs via CMake/Ninja Wine)"
-  bash /docker/build-hdfs-dll.sh
+  HADOOP_VERSION="${HADOOP_VERSION}" bash /docker/build-hdfs-dll.sh
 }
 
 assemble_dist() {
@@ -133,15 +145,32 @@ assemble_dist() {
     "/src/.cache/hadoop-releases"
 }
 
-echo "[build] Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF}"
-bash /docker/setup-jdk-win32-headers.sh
+write_build_meta() {
+  cat > "${HADOOP_HOME}/.winutils-build-meta" <<EOF
+hadoop_version=${HADOOP_VERSION}
+hadoop_git_ref=${HADOOP_GIT_REF}
+jdk_major=${JDK_MAJOR}
+jdk_linux=${JAVA_HOME}
+jdk_win_temurin=${TEMURIN_WIN_TAG}
+runtime_note=Use Temurin ${JDK_MAJOR} x64 Windows (same major as jdk_win_temurin)
+EOF
+}
+
+# shellcheck source=/dev/null
+source /docker/jdk-env.sh
+
+echo "[build] Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF} JDK=${JDK_MAJOR}"
+bash /docker/setup-jdk-win64.sh
 bash /docker/patch-vcpkg.sh
 /docker/install-vcpkg-deps.sh
 clone_hadoop
+HADOOP_SRC="${HADOOP_SRC}" HADOOP_VERSION="${HADOOP_VERSION}" bash /docker/verify-build-coherence.sh
 run_maven
 build_hdfs_native
 assemble_dist
-echo "[build] Sortie: ${HADOOP_HOME}/"
+write_build_meta
+HADOOP_SRC="${HADOOP_SRC}" HADOOP_VERSION="${HADOOP_VERSION}" bash /docker/verify-build-coherence.sh --with-native
+echo "[build] Output: ${HADOOP_HOME}/"
 ls -la "${DEST}/"
 
 if [[ -n "${HOST_UID:-}" && -n "${HOST_GID:-}" ]]; then

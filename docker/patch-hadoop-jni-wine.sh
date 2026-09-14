@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-HADOOP_SRC="${1:?HADOOP_SRC requis}"
+HADOOP_SRC="${1:?HADOOP_SRC required}"
 JNI_CMAKE="${HADOOP_SRC}/hadoop-common-project/hadoop-common/HadoopJNI.cmake"
 HDFS_CMAKE="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/src/CMakeLists.txt"
 LIBHDFS_CMAKE="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/src/main/native/libhdfs/CMakeLists.txt"
@@ -22,7 +22,7 @@ else()
     find_package(JNI REQUIRED)
 endif()"""
 new = """#
-# Wine cross-build (Linux host + MSVC): headers OpenJDK Linux, lien jvm.lib Windows.
+# Wine cross-build (Linux host + MSVC): OpenJDK Linux headers, Windows jvm.lib link.
 #
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND DEFINED ENV{HADOOP_WINE_CROSS_BUILD})
     file(TO_CMAKE_PATH "$ENV{JAVA_HOME}" _java_home)
@@ -36,7 +36,7 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND DEFINED ENV{HADOOP_WINE_CROSS_BU
         NO_DEFAULT_PATH)
     set(JNI_LIBRARIES ${JAVA_JVM_LIBRARY})
     if(NOT JAVA_JVM_LIBRARY OR NOT EXISTS "${JAVA_INCLUDE_PATH}/jni.h")
-        message(FATAL_ERROR "Wine JNI: JAVA_HOME ou JAVA_WIN64_HOME invalide")
+        message(FATAL_ERROR "Wine JNI: invalid JAVA_HOME or JAVA_WIN64_HOME")
     endif()
     message("Wine JNI OK: ${JAVA_JVM_LIBRARY}")
 #
@@ -48,7 +48,7 @@ else()
     find_package(JNI REQUIRED)
 endif()"""
 if old not in text:
-    raise SystemExit(f"patch JNI: bloc cible introuvable dans {path}")
+    raise SystemExit(f"patch JNI: target block not found in {path}")
 open(path, "w").write(text.replace(old, new, 1))
 PY
 fi
@@ -59,7 +59,7 @@ import sys
 path = sys.argv[1]
 text = open(path).read()
 old = "add_subdirectory(main/native/libhdfs)\nadd_subdirectory(main/native/libhdfs-tests)\nadd_subdirectory(main/native/libhdfs-examples)"
-new = """# Wine: x-platform requis par libhdfs, sans libhdfspp complet.
+new = """# Wine: x-platform required by libhdfs, without full libhdfspp.
 if(DEFINED ENV{HADOOP_WINE_CROSS_BUILD})
     add_subdirectory(main/native/libhdfspp/lib/x-platform)
 endif()
@@ -69,7 +69,7 @@ if(NOT DEFINED ENV{HADOOP_WINE_CROSS_BUILD})
     add_subdirectory(main/native/libhdfs-examples)
 endif()"""
 if old not in text:
-    raise SystemExit(f"patch hdfs cmake: bloc cible introuvable dans {path}")
+    raise SystemExit(f"patch hdfs cmake: target block not found in {path}")
 text = text.replace(old, new, 1)
 if "if (THREAD_LOCAL_SUPPORTED AND NOT DEFINED ENV{HADOOP_WINE_CROSS_BUILD})" not in text:
     text = text.replace(
@@ -143,9 +143,9 @@ else()
     hadoop_dual_output_directory(hdfs ${{OUT_DIR}})
 endif()"""
 if old not in text:
-    raise SystemExit(f"patch libhdfs: bloc cible introuvable dans {path}")
+    raise SystemExit(f"patch libhdfs: target block not found in {path}")
 text = text.replace(old, new, 1)
-# Pas de tests libhdfs en cross-build Wine
+# Skip libhdfs tests in Wine cross-build
 text = text.replace(
     "build_libhdfs_test(test_libhdfs_ops hdfs_static test_libhdfs_ops.c)",
     "if(NOT DEFINED ENV{HADOOP_WINE_CROSS_BUILD})\nbuild_libhdfs_test(test_libhdfs_ops hdfs_static test_libhdfs_ops.c)",

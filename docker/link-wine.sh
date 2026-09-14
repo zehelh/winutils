@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Wrapper link.exe : convertit les chemins Unix (dont @fichier.rsp) pour Wine/MSVC.
+# link.exe wrapper: convert Unix paths (including @file.rsp) for Wine/MSVC.
 set -euo pipefail
 
 # shellcheck source=/dev/null
@@ -22,7 +22,7 @@ to_win_path() {
 
 winify_arg() {
   local a="$1"
-  # Options MSVC (/NOLOGO, /DLL, ...) : ne pas convertir.
+  # MSVC options (/NOLOGO, /DLL, ...): do not convert.
   if [[ "$a" == /* ]] && [[ "$a" != //* ]] && [[ ! "$a" =~ ^/opt/ ]] && [[ ! "$a" =~ ^/tmp/ ]] && [[ ! "$a" =~ ^/src/ ]]; then
     echo "$a"
     return

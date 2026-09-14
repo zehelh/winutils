@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Patches vcpkg pour compilation MSVC via Wine (toolset=msvc, pas gcc/MinGW).
+# Patch vcpkg for MSVC compilation via Wine (toolset=msvc, not gcc/MinGW).
 set -euo pipefail
 
 VCPKG_ROOT="${VCPKG_ROOT:-/opt/vcpkg}"
@@ -56,7 +56,7 @@ old = """else
 }"""
 new = """else
 {
-    # msvc-wine-call-batch: msvcenv.sh deja source, pas de cmd.exe sous Linux.
+    # msvc-wine-call-batch: msvcenv.sh already sourced, no cmd.exe on Linux.
     local rule call-batch-script ( command )
     {
         return "" ;
@@ -107,7 +107,7 @@ open(path, "w", encoding="utf-8").write(text.replace(old, new, 1))
 PY
 }
 
-# Re-appliquer boost-modular-build si target-os manque (patch incrementiel).
+# Re-apply boost-modular-build if target-os is missing (incremental patch).
 if [[ -f "${BM}" ]] && grep -q "msvc-wine" "${BM}" && ! grep -q "target-os=windows" "${BM}"; then
   sed -i '/list(APPEND _bm_OPTIONS toolset=msvc)/a\
     if(VCPKG_CHAINLOAD_TOOLCHAIN_FILE MATCHES "msvc-wine")\

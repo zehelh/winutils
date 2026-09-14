@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Copie les binaires natifs Windows (format cdarlint) dans HADOOP_HOME/bin/.
+# Copy Windows native binaries (cdarlint layout) into HADOOP_HOME/bin/.
 set -euo pipefail
 
-HADOOP_BIN="${1:?HADOOP_BIN requis}"
+HADOOP_BIN="${1:?HADOOP_BIN required}"
 shift
 
 mkdir -p "${HADOOP_BIN}"
 
 for native_dir in "$@"; do
   [[ -d "${native_dir}" ]] || continue
-  echo "[overlay] Natif: ${native_dir}"
+  echo "[overlay] Native: ${native_dir}"
   shopt -s nullglob
   for artifact in \
     "${native_dir}/winutils.exe" \
@@ -29,7 +29,7 @@ for native_dir in "$@"; do
   done
 done
 
-# Binaires Linux inutiles sous Windows (release Apache).
+# Linux-only binaries from the Apache release (not needed on Windows).
 rm -f \
   "${HADOOP_BIN}/container-executor" \
   "${HADOOP_BIN}/test-container-executor" \

@@ -18,23 +18,23 @@ while [[ $# -gt 0 ]]; do
       cat <<EOF
 Usage: ./build.sh [VERSION] [options]
 
-  VERSION           Version Hadoop (defaut: 3.4.1). Voir versions.conf.
-  --rebuild-image   Reconstruit l'image Docker
-  --full            Release Apache complete (~1,7 Go), sans allègement
-  --shell           Shell interactif dans le conteneur
-  -h, --help        Affiche cette aide
+  VERSION           Hadoop version (default: 3.4.1). See versions.conf.
+  --rebuild-image   Rebuild the Docker image
+  --full            Full Apache release (~1.7 GB), no trimming
+  --shell           Interactive shell inside the container
+  -h, --help        Show this help
 EOF
       exit 0
       ;;
     -*)
-      echo "Option inconnue: $1" >&2
+      echo "Unknown option: $1" >&2
       exit 1
       ;;
     *)
       if [[ -z "${HADOOP_VERSION}" ]]; then
         HADOOP_VERSION="$1"
       else
-        echo "Une seule version par invocation: ${HADOOP_VERSION}, $1" >&2
+        echo "Only one version per invocation: ${HADOOP_VERSION}, $1" >&2
         exit 1
       fi
       shift
@@ -65,12 +65,12 @@ resolve_git_ref() {
 HADOOP_GIT_REF="$(resolve_git_ref "${HADOOP_VERSION}")"
 
 command -v docker >/dev/null 2>&1 || {
-  echo "Docker introuvable." >&2
+  echo "Docker not found." >&2
   exit 1
 }
 
 if [[ "$REBUILD" -eq 1 ]] || ! docker image inspect "${IMAGE_NAME}" >/dev/null 2>&1; then
-  echo "[build] Construction image ${IMAGE_NAME}"
+  echo "[build] Building image ${IMAGE_NAME}"
   docker build ${REBUILD:+--no-cache} -t "${IMAGE_NAME}" \
     -f "${REPO_ROOT}/docker/Dockerfile" "${REPO_ROOT}/docker"
 else
@@ -92,7 +92,9 @@ RUN=(docker run --rm
   -v "${REPO_ROOT}/docker/verify-cdarlint-bin.sh:/docker/verify-cdarlint-bin.sh:ro"
   -v "${REPO_ROOT}/docker/build-hdfs-dll.sh:/docker/build-hdfs-dll.sh:ro"
   -v "${REPO_ROOT}/docker/patch-hadoop-jni-wine.sh:/docker/patch-hadoop-jni-wine.sh:ro"
+  -v "${REPO_ROOT}/docker/jdk-env.sh:/docker/jdk-env.sh:ro"
   -v "${REPO_ROOT}/docker/setup-jdk-win64.sh:/docker/setup-jdk-win64.sh:ro"
+  -v "${REPO_ROOT}/docker/verify-build-coherence.sh:/docker/verify-build-coherence.sh:ro"
   -v "${REPO_ROOT}/docker/entrypoint.sh:/opt/entrypoint.sh:ro"
   -v "${REPO_ROOT}/docker/msbuild-wine.sh:/usr/local/bin/msbuild:ro"
   -v "${REPO_ROOT}/versions.conf:/src/versions.conf:ro"
@@ -121,14 +123,14 @@ fi
 
 echo "[build] Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF}"
 if ! "${RUN[@]}" "${IMAGE_NAME}" bash /docker/build-in-container.sh; then
-  echo "[build] Erreur: le conteneur a echoue (code de sortie non nul)." >&2
+  echo "[build] Error: container exited with a non-zero status." >&2
   exit 1
 fi
 
 if [[ -f "${DEST}/winutils.exe" && -f "${HADOOP_HOME}/libexec/hadoop-config.cmd" ]]; then
-  echo "[build] Termine: ${HADOOP_HOME}/"
+  echo "[build] Done: ${HADOOP_HOME}/"
   ls -la "${DEST}"
 else
-  echo "[build] Erreur: layout incomplet (${HADOOP_HOME})" >&2
+  echo "[build] Error: incomplete layout (${HADOOP_HOME})" >&2
   exit 1
 fi

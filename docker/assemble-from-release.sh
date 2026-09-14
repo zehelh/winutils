@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# HADOOP_HOME complet : release binaire Apache + winutils.exe / hadoop.dll natifs.
+# Full HADOOP_HOME: Apache release tarball + native winutils.exe / hadoop.dll / hdfs.dll overlay.
 set -euo pipefail
 
-HADOOP_VERSION="${1:?HADOOP_VERSION requis}"
-HADOOP_HOME="${2:?HADOOP_HOME requis}"
-COMMON_BIN="${3:?COMMON_BIN (hadoop-common target/bin) requis}"
+HADOOP_VERSION="${1:?HADOOP_VERSION required}"
+HADOOP_HOME="${2:?HADOOP_HOME required}"
+COMMON_BIN="${3:?COMMON_BIN (hadoop-common target/bin) required}"
 HDFS_BIN="${4:-}"
 CACHE_DIR="${5:-/src/.cache/hadoop-releases}"
-# lite (defaut) : allège pour PySpark / hadoop.cmd classpath --glob
-# full : release Apache integrale (~1,7 Go)
+# lite (default): trimmed for PySpark / hadoop.cmd classpath --glob
+# full: complete Apache release (~1.7 GB)
 DIST_PROFILE="${HADOOP_DIST_PROFILE:-lite}"
 
 TARBALL="hadoop-${HADOOP_VERSION}.tar.gz"
@@ -16,11 +16,11 @@ TARBALL_PATH="${CACHE_DIR}/${TARBALL}"
 PARENT_DIR="$(dirname "${HADOOP_HOME}")"
 
 [[ -f "${COMMON_BIN}/winutils.exe" ]] || {
-  echo "[assemble] Erreur: winutils.exe absent (${COMMON_BIN})" >&2
+  echo "[assemble] Error: winutils.exe missing (${COMMON_BIN})" >&2
   exit 1
 }
 [[ -f "${COMMON_BIN}/hadoop.dll" ]] || {
-  echo "[assemble] Erreur: hadoop.dll absent (${COMMON_BIN})" >&2
+  echo "[assemble] Error: hadoop.dll missing (${COMMON_BIN})" >&2
   exit 1
 }
 
@@ -35,36 +35,36 @@ download_tarball() {
 
   for base in "${bases[@]}"; do
     url="${base}/${TARBALL}"
-    echo "[assemble] Telechargement ${url}"
+    echo "[assemble] Downloading ${url}"
     if curl -fsSL --retry 3 --retry-delay 2 -o "${TARBALL_PATH}.partial" "${url}"; then
       mv -f "${TARBALL_PATH}.partial" "${TARBALL_PATH}"
       if curl -fsSL --retry 2 -o "${TARBALL_PATH}.sha512" "${url}.sha512" 2>/dev/null; then
         local expected actual
-        # Format Apache : SHA512 (fichier) = <hash>
+        # Apache format: SHA512 (file) = <hash>
         expected="$(sed -n 's/.*= //p' "${TARBALL_PATH}.sha512" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')"
         actual="$(sha512sum "${TARBALL_PATH}" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')"
         if [[ "${expected}" != "${actual}" ]]; then
-          echo "[assemble] Erreur: SHA512 invalide pour ${TARBALL}" >&2
+          echo "[assemble] Error: invalid SHA512 for ${TARBALL}" >&2
           rm -f "${TARBALL_PATH}"
           exit 1
         fi
         echo "[assemble] SHA512 OK"
       else
-        echo "[assemble] Avertissement: pas de verification SHA512" >&2
+        echo "[assemble] Warning: no SHA512 verification" >&2
       fi
       return 0
     fi
     rm -f "${TARBALL_PATH}.partial"
   done
 
-  echo "[assemble] Erreur: impossible de telecharger hadoop-${HADOOP_VERSION}.tar.gz" >&2
+  echo "[assemble] Error: unable to download hadoop-${HADOOP_VERSION}.tar.gz" >&2
   exit 1
 }
 
 if [[ ! -f "${TARBALL_PATH}" ]]; then
   download_tarball
 else
-  echo "[assemble] Cache tarball ${TARBALL_PATH}"
+  echo "[assemble] Cached tarball ${TARBALL_PATH}"
 fi
 
 rm -rf "${HADOOP_HOME}"
@@ -72,7 +72,7 @@ mkdir -p "${PARENT_DIR}"
 tar -xzf "${TARBALL_PATH}" -C "${PARENT_DIR}"
 
 [[ -d "${HADOOP_HOME}" ]] || {
-  echo "[assemble] Erreur: ${HADOOP_HOME} absent apres extraction" >&2
+  echo "[assemble] Error: ${HADOOP_HOME} missing after extraction" >&2
   exit 1
 }
 
@@ -84,7 +84,7 @@ trim_lite() {
   local before after saved
   before="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
 
-  echo "[assemble] Allègement profil lite..."
+  echo "[assemble] Trimming lite profile..."
   rm -rf \
     "${HADOOP_HOME}/share/doc" \
     "${HADOOP_HOME}/share/hadoop/tools" \
@@ -104,14 +104,14 @@ trim_lite() {
 
   after="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
   saved=$(( (before - after) / 1024 / 1024 ))
-  echo "[assemble] Profil lite: ~${saved} Mo retires"
+  echo "[assemble] Lite profile: ~${saved} MB removed"
 }
 
 case "${DIST_PROFILE}" in
   lite|windows-client) trim_lite ;;
-  full) echo "[assemble] Profil full: release Apache non allégée" ;;
+  full) echo "[assemble] Full profile: untrimmed Apache release" ;;
   *)
-    echo "[assemble] Erreur: HADOOP_DIST_PROFILE inconnu: ${DIST_PROFILE} (lite|full)" >&2
+    echo "[assemble] Error: unknown HADOOP_DIST_PROFILE: ${DIST_PROFILE} (lite|full)" >&2
     exit 1
     ;;
 esac
@@ -124,14 +124,14 @@ for req in \
   "${HADOOP_HOME}/share/hadoop/common/hadoop-common-${HADOOP_VERSION}.jar" \
   "${HADOOP_HOME}/bin/hadoop.cmd"; do
   [[ -e "${req}" ]] || {
-    echo "[assemble] Erreur: layout incomplet, manquant: ${req}" >&2
+    echo "[assemble] Error: incomplete layout, missing: ${req}" >&2
     exit 1
   }
 done
 
 if ! compgen -G "${HADOOP_HOME}/share/hadoop/hdfs/hadoop-hdfs-${HADOOP_VERSION}.jar" >/dev/null; then
-  echo "[assemble] Avertissement: jar hdfs absent (classpath hdfs limite)" >&2
+  echo "[assemble] Warning: hdfs jar missing (limited hdfs classpath)" >&2
 fi
 
 size_human="$(du -sh "${HADOOP_HOME}" | awk '{print $1}')"
-echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (${DIST_PROFILE}, ${size_human}, release + natif Wine)"
+echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (${DIST_PROFILE}, ${size_human}, release + Wine native)"

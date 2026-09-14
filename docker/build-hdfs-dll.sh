@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compile hdfs.dll (libhdfs) via CMake/Ninja + MSVC Wine.
+# Build hdfs.dll (libhdfs) via CMake/Ninja + MSVC Wine.
 set -euo pipefail
 
 HADOOP_SRC="${HADOOP_SRC:-/src/hadoop-src}"
@@ -15,11 +15,10 @@ WINE=$(command -v wine64 || command -v wine)
 # shellcheck source=/dev/null
 source /opt/msvc/bin/x64/msvcenv.sh
 export PATH="/opt/msvc/bin/x64:/usr/local/bin:${PATH}"
-export JAVA_HOME="${JAVA_HOME:-/usr/lib/jvm/java-8-openjdk-amd64}"
-export JAVA_WIN64_HOME="${JDK_WIN_ROOT}"
+# shellcheck source=/dev/null
+source /docker/jdk-env.sh
 export HADOOP_WINE_CROSS_BUILD=1
 
-bash /docker/setup-jdk-win32-headers.sh
 bash /docker/setup-jdk-win64.sh
 bash /docker/patch-vcpkg.sh
 /docker/install-vcpkg-deps.sh
@@ -45,7 +44,7 @@ cmake -S "${HDFS_MODULE}/src" -B "${BUILD_DIR}" \
   -DBUILD_SHARED_HDFSPP=OFF \
   -DNO_SASL=ON
 
-echo "[hdfs] Ninja: cible hdfs..."
+echo "[hdfs] Ninja: target hdfs..."
 ninja -C "${BUILD_DIR}" hdfs
 
 for artifact in hdfs.dll hdfs.lib hdfs.exp hdfs.pdb; do
@@ -53,7 +52,17 @@ for artifact in hdfs.dll hdfs.lib hdfs.exp hdfs.pdb; do
 done
 
 [[ -f "${OUT_BIN}/hdfs.dll" ]] || {
-  echo "[hdfs] Erreur: hdfs.dll absent apres build" >&2
+  echo "[hdfs] Error: hdfs.dll missing after build" >&2
   exit 1
 }
-echo "[hdfs] OK: ${OUT_BIN}/hdfs.dll"
+
+if [[ -n "${HADOOP_VERSION:-}" && -f "${HADOOP_SRC}/pom.xml" ]]; then
+  src_ver="$(grep -m1 '<version>' "${HADOOP_SRC}/pom.xml" | sed 's|.*<version>\([^<]*\)</version>.*|\1|' | tr -d '[:space:]')"
+  if [[ "${src_ver}" != "${HADOOP_VERSION}" ]]; then
+    echo "[hdfs] Error: hdfs.dll built from sources ${src_ver}, build ${HADOOP_VERSION}" >&2
+    exit 1
+  fi
+  echo "[hdfs] Version aligned: sources + native = ${HADOOP_VERSION}"
+fi
+
+echo "[hdfs] OK: ${OUT_BIN}/hdfs.dll (JDK link: Temurin ${TEMURIN_WIN_TAG} jvm.lib)"

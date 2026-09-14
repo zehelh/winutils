@@ -81,7 +81,7 @@ run_maven_native() {
   cd "${HADOOP_SRC}"
 
   echo "[win] Maven: hadoop-common + hdfs-native-client (native-win)"
-  mvn clean package \
+  mvn --batch-mode clean package \
     -pl hadoop-common-project/hadoop-common,hadoop-hdfs-project/hadoop-hdfs-native-client \
     -am \
     -Pnative-win \

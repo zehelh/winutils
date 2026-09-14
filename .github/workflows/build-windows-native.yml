@@ -1,0 +1,79 @@
+# Native Windows build (no Wine). Produces the same hadoop-<version>/ layout as ./build.sh.
+# Recommended if JNI fails with the Linux/Wine cross-compile artifacts.
+name: Build Windows Native
+
+on:
+  workflow_dispatch:
+    inputs:
+      hadoop_version:
+        description: Hadoop version
+        required: true
+        default: "3.4.1"
+        type: string
+      dist_profile:
+        description: Distribution profile (lite or full)
+        required: true
+        default: lite
+        type: choice
+        options:
+          - lite
+          - full
+
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 180
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Temurin JDK 17.0.20.1
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17.0.20.1"
+          architecture: x64
+          cache: maven
+
+      - name: Setup Maven
+        uses: actions/setup-maven@v4
+        with:
+          maven-version: "3.9.9"
+
+      - name: Verify JDK
+        shell: bash
+        run: |
+          java -version
+          echo "JAVA_HOME=$JAVA_HOME"
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: .cache/vcpkg
+          key: vcpkg-win-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
+          restore-keys: |
+            vcpkg-win-
+
+      - name: Cache Hadoop release tarballs
+        uses: actions/cache@v4
+        with:
+          path: .cache/hadoop-releases
+          key: hadoop-releases-${{ inputs.hadoop_version }}
+
+      - name: Build native + assemble
+        shell: bash
+        env:
+          HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
+          VCPKG_ROOT: ${{ github.workspace }}/.cache/vcpkg
+          SHELL_EXECUTABLE: bash.exe
+        run: |
+          chmod +x scripts/build-windows-native.sh docker/assemble-from-release.sh docker/overlay-native-bin.sh docker/verify-cdarlint-bin.sh
+          bash scripts/build-windows-native.sh "${{ inputs.hadoop_version }}"
+
+      - name: Upload HADOOP_HOME artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadoop-${{ inputs.hadoop_version }}-windows-native
+          path: hadoop-${{ inputs.hadoop_version }}/
+          retention-days: 14

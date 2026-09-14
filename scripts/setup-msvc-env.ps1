@@ -4,6 +4,17 @@ param([switch]$ExportToGitHubEnv)
 
 $ErrorActionPreference = "Stop"
 
+function Get-ToolVersionLine([string]$Cmd) {
+    # Native tools (cl.exe) print version to stderr; avoid PS error records with ErrorAction Stop.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    try {
+        return (cmd /c $Cmd 2>&1 | Select-Object -First 1)
+    } finally {
+        $ErrorActionPreference = $prev
+    }
+}
+
 function Test-MsvcReady {
     return (Get-Command msbuild.exe -ErrorAction SilentlyContinue) -and
            (Get-Command cl.exe -ErrorAction SilentlyContinue)
@@ -81,5 +92,5 @@ if (-not (Test-MsvcReady)) {
     throw "[msvc] vcvars64 loaded but msbuild/cl still missing."
 }
 
-Write-Host "[msvc] OK: $(msbuild -version | Select-Object -First 1)"
-Write-Host "[msvc] OK: $(cl 2>&1 | Select-Object -First 1)"
+Write-Host "[msvc] OK: $(Get-ToolVersionLine 'msbuild -version')"
+Write-Host "[msvc] OK: $(Get-ToolVersionLine 'cl 2>&1')"

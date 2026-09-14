@@ -72,6 +72,9 @@ if (-not $SkipJavaCheck -and -not (Get-Command java -ErrorAction SilentlyContinu
 
 mvn -version
 git --version
-msbuild -version | Select-Object -First 1
-cl 2>&1 | Select-Object -First 1
+$prevEap = $ErrorActionPreference
+$ErrorActionPreference = "SilentlyContinue"
+Write-Host "[toolchain] $(cmd /c 'msbuild -version 2>&1' | Select-Object -First 1)"
+Write-Host "[toolchain] $(cmd /c 'cl 2>&1' | Select-Object -First 1)"
+$ErrorActionPreference = $prevEap
 Write-Host "=== Ready ==="

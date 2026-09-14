@@ -69,9 +69,39 @@ else
   echo "[assemble] Cached tarball ${TARBALL_PATH}"
 fi
 
+is_windows_env() {
+  [[ "${OS:-}" == "Windows_NT" ]] || [[ "${RUNNER_OS:-}" == "Windows" ]]
+}
+
+extract_release_tarball() {
+  local name="hadoop-${HADOOP_VERSION}"
+  local -a tar_args=(-xzf "${TARBALL_PATH}" -C "${PARENT_DIR}")
+
+  if is_windows_env; then
+    # Apache tarball ships Linux lib/native as symlinks; Git Bash tar cannot create them.
+    # Lite profile removes lib/ anyway; Windows HADOOP_HOME uses our native bin/ overlay.
+    tar_args+=(--exclude="${name}/lib/native")
+    echo "[assemble] Windows: excluding ${name}/lib/native (Linux symlinks)"
+  fi
+
+  if tar "${tar_args[@]}"; then
+    return 0
+  fi
+
+  # Fallback: partial extract is OK if bin/ layout exists (symlink-only failures).
+  if is_windows_env && [[ -d "${HADOOP_HOME}/bin" ]]; then
+    echo "[assemble] Warning: tar errors ignored (Windows symlink limits)" >&2
+    return 0
+  fi
+  return 1
+}
+
 rm -rf "${HADOOP_HOME}"
 mkdir -p "${PARENT_DIR}"
-tar -xzf "${TARBALL_PATH}" -C "${PARENT_DIR}"
+extract_release_tarball || {
+  echo "[assemble] Error: failed to extract ${TARBALL}" >&2
+  exit 1
+}
 
 [[ -d "${HADOOP_HOME}" ]] || {
   echo "[assemble] Error: ${HADOOP_HOME} missing after extraction" >&2
@@ -136,4 +166,4 @@ if ! compgen -G "${HADOOP_HOME}/share/hadoop/hdfs/hadoop-hdfs-${HADOOP_VERSION}.
 fi
 
 size_human="$(du -sh "${HADOOP_HOME}" | awk '{print $1}')"
-echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (${DIST_PROFILE}, ${size_human}, release + Wine native)"
+echo "[assemble] HADOOP_HOME: ${HADOOP_HOME}/ (${DIST_PROFILE}, ${size_human}, release + native overlay)"

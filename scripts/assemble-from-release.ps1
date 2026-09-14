@@ -75,7 +75,18 @@ else { Write-Host "[assemble] Cached tarball $TarballPath" }
 
 if (Test-Path $HadoopHome) { Remove-Item -Recurse -Force $HadoopHome }
 New-Item -ItemType Directory -Force -Path $ParentDir | Out-Null
-& tar -xzf $TarballPath -C $ParentDir
+$excludeNative = "hadoop-$HadoopVersion/lib/native"
+Write-Host "[assemble] Windows: excluding $excludeNative (Linux symlinks)"
+$tarOk = $false
+try {
+    & tar -xzf $TarballPath -C $ParentDir "--exclude=$excludeNative"
+    if ($LASTEXITCODE -eq 0) { $tarOk = $true }
+} catch { }
+if (-not $tarOk -and (Test-Path (Join-Path $HadoopHome "bin"))) {
+    Write-Warning "[assemble] tar symlink errors ignored (Windows)"
+    $tarOk = $true
+}
+if (-not $tarOk) { throw "[assemble] failed to extract $Tarball" }
 if (-not (Test-Path $HadoopHome)) { throw "[assemble] $HadoopHome missing after extract" }
 
 function Copy-NativeArtifacts([string[]]$NativeDirs) {

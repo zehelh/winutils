@@ -114,11 +114,39 @@ run_maven() {
     -Duse.platformToolsetVersion=v145
 }
 
+HDFS_NATIVE_BIN="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/target/bin"
+
+build_hdfs_native() {
+  local vcpkg_win toolchain_win
+  vcpkg_win=$(vcpkg_to_win "${VCPKG_ROOT}")
+  toolchain_win="${vcpkg_win}\\scripts\\buildsystems\\vcpkg.cmake"
+
+  echo "[build] Maven: hdfs-native-client (hdfs.dll, experimental Wine)"
+  if mvn package \
+    -rf :hadoop-hdfs-native-client \
+    -Pnative-win \
+    "${maven_common_flags[@]}" \
+    -Drequire.openssl \
+    -Dopenssl.prefix="${vcpkg_win}\\installed\\x64-windows" \
+    -Dcmake.prefix.path="${vcpkg_win}\\installed\\x64-windows" \
+    -Dwindows.cmake.toolchain.file="${toolchain_win}" \
+    -Dwindows.cmake.build.type=RelWithDebInfo \
+    -Dwindows.build.hdfspp.dll=off -Dwindows.no.sasl=on \
+    -Duse.platformToolsetVersion=v145; then
+    [[ -f "${HDFS_NATIVE_BIN}/hdfs.dll" ]] && echo "[build] hdfs.dll OK"
+  else
+    echo "[build] Avertissement: hdfs.dll non compile (cmake/VS sous Wine)" >&2
+  fi
+}
+
 assemble_dist() {
+  local hdfs_bin=""
+  [[ -d "${HDFS_NATIVE_BIN}" && -f "${HDFS_NATIVE_BIN}/hdfs.dll" ]] && hdfs_bin="${HDFS_NATIVE_BIN}"
   bash /docker/assemble-from-release.sh \
     "${HADOOP_VERSION}" \
     "${HADOOP_HOME}" \
     "${HADOOP_SRC}/hadoop-common-project/hadoop-common/target/bin" \
+    "${hdfs_bin}" \
     "/src/.cache/hadoop-releases"
 }
 
@@ -128,6 +156,7 @@ bash /docker/patch-vcpkg.sh
 /docker/install-vcpkg-deps.sh
 clone_hadoop
 run_maven
+build_hdfs_native
 assemble_dist
 echo "[build] Sortie: ${HADOOP_HOME}/"
 ls -la "${DEST}/"

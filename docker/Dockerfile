@@ -54,12 +54,16 @@ COPY install-vcpkg-deps.sh /docker/install-vcpkg-deps.sh
 COPY patch-vcpkg.sh /docker/patch-vcpkg.sh
 COPY setup-jdk-win32-headers.sh /docker/setup-jdk-win32-headers.sh
 COPY assemble-from-release.sh /docker/assemble-from-release.sh
+COPY overlay-native-bin.sh /docker/overlay-native-bin.sh
+COPY verify-cdarlint-bin.sh /docker/verify-cdarlint-bin.sh
 COPY jdk-win32/ /docker/jdk-win32/
 COPY entrypoint.sh /opt/entrypoint.sh
 COPY build-in-container.sh /opt/build-in-container.sh
 RUN chmod +x /usr/local/bin/msbuild /usr/local/bin/cmd /usr/local/bin/link \
     /docker/install-vcpkg-deps.sh /docker/patch-vcpkg.sh /docker/setup-jdk-win32-headers.sh \
     /docker/assemble-from-release.sh \
+    /docker/overlay-native-bin.sh \
+    /docker/verify-cdarlint-bin.sh \
     /docker/link-wine.sh /opt/entrypoint.sh /opt/build-in-container.sh \
     && bash /docker/setup-jdk-win32-headers.sh \
     && test -n "$(find /opt/msvc -name MSBuild.exe | head -1)"

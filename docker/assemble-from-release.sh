@@ -4,22 +4,23 @@ set -euo pipefail
 
 HADOOP_VERSION="${1:?HADOOP_VERSION requis}"
 HADOOP_HOME="${2:?HADOOP_HOME requis}"
-NATIVE_BIN="${3:?NATIVE_BIN (target/bin natif) requis}"
-CACHE_DIR="${4:-/src/.cache/hadoop-releases}"
-# windows-client (defaut) : allège pour PySpark / hadoop.cmd classpath --glob
+COMMON_BIN="${3:?COMMON_BIN (hadoop-common target/bin) requis}"
+HDFS_BIN="${4:-}"
+CACHE_DIR="${5:-/src/.cache/hadoop-releases}"
+# lite (defaut) : allège pour PySpark / hadoop.cmd classpath --glob
 # full : release Apache integrale (~1,7 Go)
-DIST_PROFILE="${HADOOP_DIST_PROFILE:-windows-client}"
+DIST_PROFILE="${HADOOP_DIST_PROFILE:-lite}"
 
 TARBALL="hadoop-${HADOOP_VERSION}.tar.gz"
 TARBALL_PATH="${CACHE_DIR}/${TARBALL}"
 PARENT_DIR="$(dirname "${HADOOP_HOME}")"
 
-[[ -f "${NATIVE_BIN}/winutils.exe" ]] || {
-  echo "[assemble] Erreur: winutils.exe absent (${NATIVE_BIN})" >&2
+[[ -f "${COMMON_BIN}/winutils.exe" ]] || {
+  echo "[assemble] Erreur: winutils.exe absent (${COMMON_BIN})" >&2
   exit 1
 }
-[[ -f "${NATIVE_BIN}/hadoop.dll" ]] || {
-  echo "[assemble] Erreur: hadoop.dll absent (${NATIVE_BIN})" >&2
+[[ -f "${COMMON_BIN}/hadoop.dll" ]] || {
+  echo "[assemble] Erreur: hadoop.dll absent (${COMMON_BIN})" >&2
   exit 1
 }
 
@@ -75,14 +76,15 @@ tar -xzf "${TARBALL_PATH}" -C "${PARENT_DIR}"
   exit 1
 }
 
-echo "[assemble] Overlay binaires natifs dans bin/"
-cp -f "${NATIVE_BIN}/winutils.exe" "${NATIVE_BIN}/hadoop.dll" "${HADOOP_HOME}/bin/"
+overlay_dirs=("${COMMON_BIN}")
+[[ -n "${HDFS_BIN}" && -d "${HDFS_BIN}" ]] && overlay_dirs+=("${HDFS_BIN}")
+bash /docker/overlay-native-bin.sh "${HADOOP_HOME}/bin" "${overlay_dirs[@]}"
 
-trim_windows_client() {
+trim_lite() {
   local before after saved
   before="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
 
-  echo "[assemble] Allègement profil windows-client..."
+  echo "[assemble] Allègement profil lite..."
   rm -rf \
     "${HADOOP_HOME}/share/doc" \
     "${HADOOP_HOME}/share/hadoop/tools" \
@@ -100,36 +102,27 @@ trim_windows_client() {
     "${HADOOP_HOME}/share/hadoop/yarn/test" \
     "${HADOOP_HOME}/share/hadoop/mapreduce/sources"
 
-  rm -f \
-    "${HADOOP_HOME}/bin/container-executor" \
-    "${HADOOP_HOME}/bin/test-container-executor" \
-    "${HADOOP_HOME}/bin/oom-listener" \
-    "${HADOOP_HOME}/bin/hadoop" \
-    "${HADOOP_HOME}/bin/hdfs" \
-    "${HADOOP_HOME}/bin/yarn" \
-    "${HADOOP_HOME}/bin/mapred"
-
   after="$(du -sb "${HADOOP_HOME}" | awk '{print $1}')"
   saved=$(( (before - after) / 1024 / 1024 ))
-  echo "[assemble] Profil windows-client: ~${saved} Mo retires"
+  echo "[assemble] Profil lite: ~${saved} Mo retires"
 }
 
 case "${DIST_PROFILE}" in
-  windows-client) trim_windows_client ;;
+  lite|windows-client) trim_lite ;;
   full) echo "[assemble] Profil full: release Apache non allégée" ;;
   *)
-    echo "[assemble] Erreur: HADOOP_DIST_PROFILE inconnu: ${DIST_PROFILE} (windows-client|full)" >&2
+    echo "[assemble] Erreur: HADOOP_DIST_PROFILE inconnu: ${DIST_PROFILE} (lite|full)" >&2
     exit 1
     ;;
 esac
+
+bash /docker/verify-cdarlint-bin.sh "${HADOOP_HOME}/bin"
 
 for req in \
   "${HADOOP_HOME}/libexec/hadoop-config.cmd" \
   "${HADOOP_HOME}/etc/hadoop/core-site.xml" \
   "${HADOOP_HOME}/share/hadoop/common/hadoop-common-${HADOOP_VERSION}.jar" \
-  "${HADOOP_HOME}/bin/hadoop.cmd" \
-  "${HADOOP_HOME}/bin/winutils.exe" \
-  "${HADOOP_HOME}/bin/hadoop.dll"; do
+  "${HADOOP_HOME}/bin/hadoop.cmd"; do
   [[ -e "${req}" ]] || {
     echo "[assemble] Erreur: layout incomplet, manquant: ${req}" >&2
     exit 1

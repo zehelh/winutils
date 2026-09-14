@@ -29,7 +29,25 @@ $vsPath = & $vswhere -latest -products * `
     -property installationPath
 
 if (-not $vsPath) {
-    throw "[msvc] Visual Studio C++ tools (MSVC v143) not found. Install 'Desktop development with C++'."
+    $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
+    $existing = @(& $vswhere -all -products * -property installationPath 2>$null | Where-Object { $_ })
+    $hint = @"
+
+[msvc] Visual Studio C++ tools (MSVC v143) not found.
+winget only installed Build Tools shell - add the C++ workload:
+
+  Option A (winget, run as Admin):
+    winget install Microsoft.VisualStudio.2022.BuildTools --force --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+
+  Option B (Visual Studio Installer):
+    Open 'Visual Studio Installer' -> Modify -> check 'Desktop development with C++' -> Install
+
+"@
+    if ($existing.Count -gt 0) {
+        $hint += "  Option C (modify existing install at $($existing[0])):`n"
+        $hint += "    & `"$installer`" modify --installPath `"$($existing[0])`" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart`n"
+    }
+    throw $hint.Trim()
 }
 
 $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"

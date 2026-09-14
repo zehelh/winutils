@@ -87,14 +87,15 @@ if (-not $SkipJavaCheck -and -not (Get-Command java -ErrorAction SilentlyContinu
     }
     Write-Warning "[toolchain] java not on PATH - OK for MSVC check only"
 } elseif (Get-Command java -ErrorAction SilentlyContinue) {
-    java -version
+    cmd /c "java -version 2>&1 & exit /b 0" 2>&1 | ForEach-Object { Write-Host $_ }
 }
 
-mvn -version
-git --version
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "SilentlyContinue"
+cmd /c "mvn -version 2>&1 & exit /b 0" 2>&1 | ForEach-Object { Write-Host $_ }
+cmd /c "git --version 2>&1 & exit /b 0" 2>&1 | ForEach-Object { Write-Host $_ }
 Write-Host "[toolchain] $(cmd /c 'msbuild -version 2>&1 & exit /b 0' | Select-Object -First 1)"
 Write-Host "[toolchain] $(cmd /c 'cl 2>&1 & exit /b 0' | Select-Object -First 1)"
 $ErrorActionPreference = $prevEap
 Write-Host "=== Ready ==="
+exit 0

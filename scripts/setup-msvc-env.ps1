@@ -9,7 +9,8 @@ function Get-ToolVersionLine([string]$Cmd) {
     $prev = $ErrorActionPreference
     $ErrorActionPreference = "SilentlyContinue"
     try {
-        return (cmd /c $Cmd 2>&1 | Select-Object -First 1)
+        # cl.exe exits 2 when invoked without sources; force cmd exit 0 so callers are not fooled.
+        return (cmd /c "$Cmd & exit /b 0" 2>&1 | Select-Object -First 1)
     } finally {
         $ErrorActionPreference = $prev
     }
@@ -94,3 +95,4 @@ if (-not (Test-MsvcReady)) {
 
 Write-Host "[msvc] OK: $(Get-ToolVersionLine 'msbuild -version')"
 Write-Host "[msvc] OK: $(Get-ToolVersionLine 'cl 2>&1')"
+exit 0

@@ -30,7 +30,8 @@ foreach ($dir in @("C:\hadoop-src", "C:\vcpkg")) {
 & (Join-Path $script:WinutilsScriptDir "ensure-maven.ps1") -ExportToGitHubEnv:$ExportToGitHubEnv
 
 & (Join-Path $script:WinutilsScriptDir "setup-msvc-env.ps1") -ExportToGitHubEnv:$ExportToGitHubEnv
-if ($LASTEXITCODE -ne 0) {
+if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue) -or
+    -not (Get-Command cl.exe -ErrorAction SilentlyContinue)) {
     Write-Host ""
     Write-Host "Setup stopped: install C++ tools then re-run this script." -ForegroundColor Red
     exit 1
@@ -74,7 +75,7 @@ mvn -version
 git --version
 $prevEap = $ErrorActionPreference
 $ErrorActionPreference = "SilentlyContinue"
-Write-Host "[toolchain] $(cmd /c 'msbuild -version 2>&1' | Select-Object -First 1)"
-Write-Host "[toolchain] $(cmd /c 'cl 2>&1' | Select-Object -First 1)"
+Write-Host "[toolchain] $(cmd /c 'msbuild -version 2>&1 & exit /b 0' | Select-Object -First 1)"
+Write-Host "[toolchain] $(cmd /c 'cl 2>&1 & exit /b 0' | Select-Object -First 1)"
 $ErrorActionPreference = $prevEap
 Write-Host "=== Ready ==="

@@ -63,10 +63,23 @@ jobs:
           mvn -version
           git --version
 
+      - name: Enable Windows long paths for Git
+        shell: pwsh
+        run: |
+          git config --global core.longpaths true
+          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'
+          $prop = Get-ItemProperty -Path $key -Name LongPathsEnabled -ErrorAction SilentlyContinue
+          if ($null -eq $prop -or $prop.LongPathsEnabled -ne 1) {
+            Set-ItemProperty -Path $key -Name LongPathsEnabled -Value 1 -Force
+            Write-Host "LongPathsEnabled set to 1"
+          } else {
+            Write-Host "LongPathsEnabled already 1"
+          }
+
       - name: Cache vcpkg
         uses: actions/cache@v4
         with:
-          path: .cache/vcpkg
+          path: C:/vcpkg
           key: vcpkg-win-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
           restore-keys: |
             vcpkg-win-
@@ -80,8 +93,10 @@ jobs:
       - name: Build native + assemble
         env:
           CI: true
+          GITHUB_ACTIONS: true
+          HADOOP_SRC: C:/hadoop-src
           HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
-          VCPKG_ROOT: ${{ github.workspace }}/.cache/vcpkg
+          VCPKG_ROOT: C:/vcpkg
           SHELL_EXECUTABLE: bash.exe
         run: |
           chmod +x scripts/build-windows-native.sh docker/assemble-from-release.sh docker/overlay-native-bin.sh docker/verify-cdarlint-bin.sh

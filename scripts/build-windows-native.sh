@@ -6,8 +6,14 @@ set -euo pipefail
 HADOOP_VERSION="${1:-3.4.1}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSIONS_FILE="${REPO_ROOT}/versions.conf"
-HADOOP_SRC="${REPO_ROOT}/hadoop-src"
+# GHA: short path required (Hadoop BUILDING.txt — avoid MAX_PATH; default workspace is too deep).
+if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  HADOOP_SRC="${HADOOP_SRC:-/c/hadoop-src}"
+else
+  HADOOP_SRC="${HADOOP_SRC:-${REPO_ROOT}/hadoop-src}"
+fi
 HADOOP_HOME="${REPO_ROOT}/hadoop-${HADOOP_VERSION}"
+REF_FILE="${REPO_ROOT}/.hadoop-src-ref"
 VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
 VCPKG_COMMIT="${VCPKG_COMMIT:-7ffa425e1db8b0c3edf9c50f2f3a0f25a324541d}"
 CACHE_DIR="${REPO_ROOT}/.cache/hadoop-releases"
@@ -32,27 +38,37 @@ hadoop_src_version() {
   grep -m1 '<version>' "${HADOOP_SRC}/pom.xml" | sed 's|.*<version>\([^<]*\)</version>.*|\1|' | tr -d '[:space:]'
 }
 
+configure_git_longpaths() {
+  git config --global core.longpaths true
+}
+
 clone_hadoop() {
-  local ref_file="${HADOOP_SRC}/.winutils-ref" cached_ref="" src_ver=""
-  [[ -f "${ref_file}" ]] && cached_ref="$(cat "${ref_file}")"
+  local cached_ref="" src_ver=""
+  configure_git_longpaths
+  [[ -f "${REF_FILE}" ]] && cached_ref="$(cat "${REF_FILE}")"
   [[ -f "${HADOOP_SRC}/pom.xml" ]] && src_ver="$(hadoop_src_version)"
 
   if [[ -f "${HADOOP_SRC}/pom.xml" && "${cached_ref}" == "${HADOOP_GIT_REF}" && "${src_ver}" == "${HADOOP_VERSION}" ]]; then
     echo "[win] Hadoop sources already at ${HADOOP_GIT_REF} (${HADOOP_VERSION})"
   else
-    echo "[win] Cloning Hadoop ${HADOOP_GIT_REF}"
+    echo "[win] Cloning Hadoop ${HADOOP_GIT_REF} -> ${HADOOP_SRC}"
     rm -rf "${HADOOP_SRC}"
-    git clone --depth 1 --branch "${HADOOP_GIT_REF}" \
-      https://github.com/apache/hadoop.git "${HADOOP_SRC}"
-    echo "${HADOOP_GIT_REF}" > "${ref_file}"
+    mkdir -p "$(dirname "${HADOOP_SRC}")"
+    if ! git -c core.longpaths=true clone --depth 1 --branch "${HADOOP_GIT_REF}" \
+      https://github.com/apache/hadoop.git "${HADOOP_SRC}"; then
+      echo "[win] Error: git clone/checkout failed (Windows MAX_PATH? use /c/hadoop-src + core.longpaths)" >&2
+      exit 1
+    fi
+    echo "${HADOOP_GIT_REF}" > "${REF_FILE}"
   fi
+
+  git -C "${HADOOP_SRC}" config core.longpaths true
 
   src_ver="$(hadoop_src_version)"
   [[ "${src_ver}" == "${HADOOP_VERSION}" ]] || {
     echo "[win] Error: source version ${src_ver} != ${HADOOP_VERSION}" >&2
     exit 1
   }
-  git -C "${HADOOP_SRC}" config core.longpaths true
 }
 
 setup_vcpkg() {
@@ -117,6 +133,7 @@ EOF
 }
 
 echo "[win] Native Windows build Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF}"
+echo "[win] HADOOP_SRC=${HADOOP_SRC}"
 echo "[win] JAVA_HOME=${JAVA_HOME}"
 java -version
 

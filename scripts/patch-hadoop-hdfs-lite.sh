@@ -65,9 +65,40 @@ if [[ -f "${HDFS_CMAKE}" ]] && ! grep -q "${MARKER}" "${HDFS_CMAKE}"; then
   }
 fi
 
-if [[ -f "${LIBHDFS_CMAKE}" ]] && ! grep -q "${MARKER}" "${LIBHDFS_CMAKE}"; then
-  echo "[patch-hdfs] libhdfs: skip Windows libhdfs unit tests"
+if [[ -f "${LIBHDFS_CMAKE}" ]] && ! grep -q "${MARKER}: SHARED only" "${LIBHDFS_CMAKE}"; then
+  echo "[patch-hdfs] libhdfs: SHARED only + skip Windows unit tests"
   awk -v marker="${MARKER}" '
+    /hadoop_add_dual_library\(hdfs/ && !shared_done {
+      print "# " marker ": SHARED only (Ninja: duplicate hdfs.lib from dual static/shared)"
+      print "add_library(hdfs SHARED"
+      mode = "shared_args"
+      shared_done = 1
+      next
+    }
+    mode == "shared_args" {
+      print
+      if ($0 ~ /^\)$/) {
+        print "if(NEED_LINK_DL)"
+        print "   set(LIB_DL dl)"
+        print "endif()"
+        print ""
+        print "target_link_libraries(hdfs"
+        print "    ${JAVA_JVM_LIBRARY}"
+        print "    ${LIB_DL}"
+        print "    ${OS_LINK_LIBRARIES}"
+        print ")"
+        print ""
+        print "hadoop_output_directory(hdfs ${OUT_DIR})"
+        mode = "skip_dual_tail"
+      }
+      next
+    }
+    mode == "skip_dual_tail" {
+      if ($0 ~ /hadoop_dual_output_directory\(hdfs/) {
+        mode = "body"
+      }
+      next
+    }
     /build_libhdfs_test\(test_libhdfs_ops/ && !wrapped {
       print "# " marker
       print "if (NOT WIN32)"

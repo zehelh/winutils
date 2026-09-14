@@ -1,38 +1,55 @@
 # winutils
 
-Binaires Windows pour Apache Hadoop : `winutils.exe`, `hadoop.dll`, scripts `bin/` (`hadoop.cmd`, `hdfs.cmd`, etc.).
+Windows binaries for Apache Hadoop: `winutils.exe`, `hadoop.dll`, `hdfs.dll`, and `bin/` scripts (`hadoop.cmd`, `hdfs.cmd`, etc.).
 
-Format de sortie aligné sur [cdarlint/winutils](https://github.com/cdarlint/winutils) et [steveloughran/winutils](https://github.com/steveloughran/winutils).
+Output layout follows [cdarlint/winutils](https://github.com/cdarlint/winutils) and [steveloughran/winutils](https://github.com/steveloughran/winutils).
 
-## Build
+Built on Linux with Docker, Wine, and MSVC (cross-compile). Native DLLs are overlaid onto the official Apache release tarball.
 
-Prérequis hôte : Docker uniquement.
+## Requirements
+
+Host: **Docker** only.
+
+## Quick start
 
 ```bash
-./build.sh
+./build.sh              # default: Hadoop 3.4.1, lite profile
 ./build.sh 3.4.2
-./build.sh 3.5.0
+./build.sh 3.5.0 --rebuild-image
 ```
 
-Artefacts : `hadoop-<version>/bin/`
+Output: `hadoop-<version>/` (full `HADOOP_HOME` layout).
 
-### Installation Docker (CachyOS / Arch)
+### Options
 
-```bash
-sudo pacman -S docker
-sudo systemctl enable --now docker
-sudo usermod -aG docker $USER
-```
+| Option            | Description                                         |
+| ----------------- | --------------------------------------------------- |
+| `--rebuild-image` | Rebuild the Docker image (needed after JDK changes) |
+| `--full`          | Full Apache release (~1.7 GB), no trimming          |
+| `--shell`         | Interactive shell inside the container              |
+| `-h`, `--help`    | Show help                                           |
 
-Reconnexion requise après ajout au groupe `docker`.
+## Version alignment
 
-### Sources Hadoop
+Native DLLs must match both the Hadoop version and the JDK used at runtime.
 
-Le clone des sources Apache est effectué automatiquement dans `hadoop-src/` à partir du ref git défini dans `versions.conf`. Aucun téléchargement manuel.
+| Layer             | Must align on                                 |
+| ----------------- | --------------------------------------------- |
+| Release JARs      | Apache tarball `hadoop-<version>.tar.gz`      |
+| Native sources    | Same git ref as the release (`versions.conf`) |
+| JNI headers       | OpenJDK 17 (Linux build host)                 |
+| `jvm.lib` link    | Temurin 17 x64 Windows                        |
+| Runtime (Windows) | **Temurin 17 x64** (e.g. PySpark)             |
 
-### Nouvelle version
+After each build, check `hadoop-<version>/.winutils-build-meta` for the exact versions used.
 
-Ajouter une entrée dans `versions.conf` :
+Mismatch (e.g. DLLs built from 3.4.3 sources with 3.4.1 JARs, or JDK 8 link with JDK 17 runtime) causes JNI failures such as `class (null)`.
+
+## Hadoop sources
+
+Apache sources are cloned automatically into `hadoop-src/` from the git ref in `versions.conf`. No manual download.
+
+Add a new version in `versions.conf`:
 
 ```
 3.4.4=rel/release-3.4.4
@@ -42,49 +59,76 @@ Ajouter une entrée dans `versions.conf` :
 ./build.sh 3.4.4
 ```
 
-Si la version est absente de `versions.conf`, le ref par défaut est `rel/release-<version>`.
+If a version is missing from `versions.conf`, the default ref is `rel/release-<version>`.
 
-### Options
+## Distribution profiles
 
-| Option            | Action                           |
-| ----------------- | -------------------------------- |
-| `--rebuild-image` | Reconstruit l'image Docker       |
-| `--shell`         | Ouvre un shell dans le conteneur |
-| `-h`, `--help`    | Affiche l'aide                   |
+| Profile | Flag      | Size    | Contents                                                  |
+| ------- | --------- | ------- | --------------------------------------------------------- |
+| `lite`  | (default) | ~270 MB | PySpark-friendly trim: docs, tools, Linux natives removed |
+| `full`  | `--full`  | ~1.7 GB | Complete Apache release + Windows native overlay          |
 
-### Caches
+## Caches
 
-| Chemin                            | Contenu                                     |
-| --------------------------------- | ------------------------------------------- |
-| Image `winutils-hadoop-wine-msvc` | MSVC, Wine, JDK 8, Maven, vcpkg (bootstrap) |
-| `.cache/vcpkg-installed/`         | Paquets vcpkg `x64-windows`                 |
-| `~/.m2/repository`                | Artefacts Maven                             |
-| `hadoop-src/`                     | Sources Hadoop clonées                      |
+| Path                              | Contents                             |
+| --------------------------------- | ------------------------------------ |
+| Image `winutils-hadoop-wine-msvc` | MSVC, Wine, OpenJDK 17, Maven, vcpkg |
+| `.cache/vcpkg-installed/`         | vcpkg `x64-windows` packages         |
+| `.cache/hadoop-releases/`         | Cached Apache tarballs               |
+| `~/.m2/repository`                | Maven artifacts                      |
+| `hadoop-src/`                     | Cloned Hadoop sources                |
 
-## Utilisation (Windows)
+## Usage on Windows
+
+Use the **same JDK major version** as the build (Temurin 17 x64):
 
 ```cmd
-set HADOOP_HOME=C:\chemin\vers\hadoop-3.4.1
-set PATH=%PATH%;%HADOOP_HOME%\bin
+set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot
+set HADOOP_HOME=C:\path\to\hadoop-3.4.1
+set PATH=%HADOOP_HOME%\bin;%JAVA_HOME%\bin;%PATH%
 ```
 
-## Licence
+PySpark example:
 
-Les binaires (`hadoop-<version>/bin/`) sont compilés à partir d'[Apache Hadoop](https://hadoop.apache.org/), sous **Apache License 2.0** (ASF). Tu n'en es pas propriétaire : tu les redistribues selon les termes de cette licence, qui autorise usage, modification et redistribution (y compris commercial), avec obligation de conserver `LICENSE` et `NOTICE`.
+```cmd
+set PYSPARK_PYTHON=python
+set PYSPARK_DRIVER_PYTHON=python
+pyspark
+```
 
-Les scripts de build de ce dépôt sont sous la même licence (voir `LICENSE`, `NOTICE`).
+Classpath is resolved via `%HADOOP_HOME%\bin\hadoop.cmd classpath --glob`.
 
-Ce n'est pas du domaine public sans conditions : Apache 2.0 est une licence open source permissive, pas une renonciation totale aux droits de l'ASF sur Hadoop.
+## `bin/` contents (lite)
 
-## Arborescence
+Scripts from the Apache release: `hadoop.cmd`, `hdfs.cmd`, `yarn.cmd`, `mapred.cmd`, plus shell stubs.
+
+Native binaries (Wine/MSVC build): `winutils.exe`, `hadoop.dll`, `hdfs.dll`, `.pdb`, `.lib`, `.exp`, `libwinutils.lib`.
+
+## Docker setup (Arch / CachyOS)
+
+```bash
+sudo pacman -S docker
+sudo systemctl enable --now docker
+sudo usermod -aG docker $USER
+```
+
+Log out and back in after adding yourself to the `docker` group.
+
+## Layout
 
 ```
 build.sh
 versions.conf
 docker/
-hadoop-<version>/bin/
-hadoop-<version>/LICENSE
-hadoop-<version>/NOTICE
+hadoop-<version>/          # HADOOP_HOME output
+hadoop-<version>/.winutils-build-meta
 hadoop-src/
 .cache/vcpkg-installed/
+.cache/hadoop-releases/
 ```
+
+## License
+
+Binaries under `hadoop-<version>/` are built from [Apache Hadoop](https://hadoop.apache.org/) under **Apache License 2.0**. You may use, modify, and redistribute them (including commercially) provided you retain `LICENSE` and `NOTICE`.
+
+Build scripts in this repository are under the same license (see `LICENSE`, `NOTICE`).

@@ -21,7 +21,8 @@ HADOOP_HOME="${REPO_ROOT}/hadoop-${HADOOP_VERSION}"
 REF_FILE="${REPO_ROOT}/.hadoop-src-ref"
 VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
 # Native Windows: recent vcpkg (VS 2022). Docker/Wine keeps 7ffa425 in docker/Dockerfile.
-VCPKG_COMMIT="${VCPKG_COMMIT:-2024.12.16}"
+# MSYS2 packages expire on mirrors; use a recent vcpkg tag (see https://github.com/microsoft/vcpkg/releases).
+VCPKG_COMMIT="${VCPKG_COMMIT:-2026.06.24}"
 CACHE_DIR="${REPO_ROOT}/.cache/hadoop-releases"
 
 resolve_git_ref() {
@@ -78,22 +79,28 @@ clone_hadoop() {
 }
 
 ensure_vcpkg_repo() {
+  local ref_file="${VCPKG_ROOT}/.vcpkg-ref"
+  local cached_ref=""
+
+  [[ -f "${ref_file}" ]] && cached_ref="$(cat "${ref_file}")"
+
+  if [[ -d "${VCPKG_ROOT}/.git" && "${cached_ref}" == "${VCPKG_COMMIT}" ]]; then
+    echo "[win] vcpkg already at ${VCPKG_COMMIT}"
+    return 0
+  fi
+
   if [[ -d "${VCPKG_ROOT}/.git" ]]; then
-    echo "[win] vcpkg repo: updating to ${VCPKG_COMMIT}"
-    git -C "${VCPKG_ROOT}" fetch --tags --depth 1 origin 2>/dev/null || true
-    if ! git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}" 2>/dev/null; then
-      echo "[win] vcpkg checkout failed - re-cloning"
-      rm -rf "${VCPKG_ROOT}"
-    fi
+    echo "[win] vcpkg: switching ${cached_ref:-unknown} -> ${VCPKG_COMMIT}"
+    rm -rf "${VCPKG_ROOT}"
   fi
-  if [[ ! -d "${VCPKG_ROOT}/.git" ]]; then
-    echo "[win] Cloning vcpkg ${VCPKG_COMMIT}"
-    if ! git clone --depth 1 --branch "${VCPKG_COMMIT}" \
-      https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}" 2>/dev/null; then
-      git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
-      git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}"
-    fi
+
+  echo "[win] Cloning vcpkg ${VCPKG_COMMIT}"
+  if ! git clone --depth 1 --branch "${VCPKG_COMMIT}" \
+    https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}" 2>/dev/null; then
+    git clone https://github.com/microsoft/vcpkg.git "${VCPKG_ROOT}"
+    git -C "${VCPKG_ROOT}" checkout "${VCPKG_COMMIT}"
   fi
+  echo "${VCPKG_COMMIT}" > "${ref_file}"
 }
 
 bootstrap_vcpkg() {

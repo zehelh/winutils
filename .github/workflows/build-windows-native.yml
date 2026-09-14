@@ -81,7 +81,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:/vcpkg
-          key: vcpkg-win-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
+          key: vcpkg-win-2026.06.24-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
           restore-keys: |
             vcpkg-win-
 
@@ -99,7 +99,7 @@ jobs:
           HADOOP_SRC: C:/hadoop-src
           HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
           VCPKG_ROOT: C:/vcpkg
-          VCPKG_COMMIT: "2024.12.16"
+          VCPKG_COMMIT: "2026.06.24"
         run: |
           & "${{ github.workspace }}/scripts/run-build-native.ps1" -HadoopVersion "${{ inputs.hadoop_version }}"
 

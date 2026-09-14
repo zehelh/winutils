@@ -33,7 +33,7 @@ $VersionsFile = Join-Path $RepoRoot "versions.conf"
 $HadoopHome = Join-Path $RepoRoot "hadoop-$HadoopVersion"
 $RefFile = Join-Path $RepoRoot ".hadoop-src-ref"
 $CacheDir = Join-Path $RepoRoot ".cache\hadoop-releases"
-$VcpkgCommit = if ($env:VCPKG_COMMIT) { $env:VCPKG_COMMIT } else { "2024.12.16" }
+$VcpkgCommit = if ($env:VCPKG_COMMIT) { $env:VCPKG_COMMIT } else { "2026.06.24" }
 if (-not $VcpkgRoot) { $VcpkgRoot = Join-Path $RepoRoot ".cache\vcpkg" }
 
 function Write-Step([string]$Msg) { Write-Host "`n=== $Msg ===" -ForegroundColor Cyan }

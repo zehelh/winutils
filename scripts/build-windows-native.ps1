@@ -150,13 +150,10 @@ function Invoke-MavenNative {
             @mavenCommon
         if ($LASTEXITCODE -ne 0) { throw "Maven hadoop-common build failed" }
 
-        Write-Step "Maven native-win (hdfs.dll only)"
-        mvn --batch-mode clean package `
-            -pl hadoop-hdfs-project/hadoop-hdfs-native-client `
-            -am `
-            @mavenCommon `
-            "-Dnative_cmake_args=-DBUILD_SHARED_HDFSPP=OFF -DNO_SASL=ON"
-        if ($LASTEXITCODE -ne 0) { throw "Maven hdfs-native-client build failed" }
+        Write-Step "hdfs.dll via CMake/Ninja"
+        $bash = Find-BashExe
+        & $bash (Join-Path $ScriptDir "build-hdfs-dll-native.sh")
+        if ($LASTEXITCODE -ne 0) { throw "hdfs.dll native build failed" }
     } finally {
         Pop-Location
     }

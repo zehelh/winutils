@@ -162,24 +162,8 @@ run_maven_native() {
     -Dwindows.no.sasl=on \
     -Duse.platformToolsetVersion=v143
 
-  echo "[win] Maven: hdfs-native-client (hdfs.dll only, patched msbuild target)"
-  mvn --batch-mode clean package \
-    -pl hadoop-hdfs-project/hadoop-hdfs-native-client \
-    -am \
-    -Pnative-win \
-    -Dhttps.protocols=TLSv1.2 \
-    -DskipTests \
-    -DskipDocs \
-    -Dshell-executable="${SHELL_EXECUTABLE:-bash.exe}" \
-    -Drequire.openssl \
-    -Dopenssl.prefix="${vcpkg_prefix}" \
-    -Dcmake.prefix.path="${vcpkg_prefix}" \
-    -Dwindows.cmake.toolchain.file="${toolchain}" \
-    -Dwindows.cmake.build.type=RelWithDebInfo \
-    -Dwindows.build.hdfspp.dll=off \
-    -Dwindows.no.sasl=on \
-    -Duse.platformToolsetVersion=v143 \
-    -Dnative_cmake_args="-DBUILD_SHARED_HDFSPP=OFF -DNO_SASL=ON"
+  echo "[win] hdfs.dll via CMake/Ninja (skip Maven msbuild — docker-style)"
+  bash "${REPO_ROOT}/scripts/build-hdfs-dll-native.sh"
 }
 
 write_build_meta() {

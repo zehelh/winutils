@@ -16,10 +16,24 @@ if [[ ! -d "${HDFS_MODULE}" ]]; then
   exit 0
 fi
 
-# MSBuild: ALL_BUILD pulls libhdfs-tests + libhdfspp tests (native_mini_dfs, gmock, etc.).
-if [[ -f "${HDFS_POM}" ]] && grep -q 'ALL_BUILD.vcxproj' "${HDFS_POM}"; then
-  echo "[patch-hdfs] pom: msbuild hdfs.vcxproj /t:hdfs instead of ALL_BUILD"
-  sed -i 's|ALL_BUILD\.vcxproj /nologo|hdfs.vcxproj /t:hdfs /nologo|' "${HDFS_POM}"
+# Maven antrun msbuild ALL_BUILD pulls libhdfs-tests + libhdfspp tests. Prefer cmake --build --target hdfs.
+if [[ -f "${HDFS_POM}" ]] && grep -q 'executable="msbuild"' "${HDFS_POM}"; then
+  echo "[patch-hdfs] pom: cmake --build --target hdfs instead of msbuild ALL_BUILD"
+  awk '
+    /executable="msbuild"/ {
+      print "<exec executable=\"cmake\" dir=\"${project.build.directory}/native\""
+      print "                          failonerror=\"true\">"
+      print "                      <arg line=\"--build . --config RelWithDebInfo --target hdfs --parallel -v\"/>"
+      print "                      <arg line=\"${native_make_args}\"/>"
+      print "                    </exec>"
+      skip = 1
+      next
+    }
+    skip && /<\/exec>/ { skip = 0; next }
+    skip { next }
+    { print }
+  ' "${HDFS_POM}" > "${HDFS_POM}.tmp"
+  mv "${HDFS_POM}.tmp" "${HDFS_POM}"
 fi
 
 if [[ -f "${HDFS_CMAKE}" ]] && ! grep -q "${MARKER}" "${HDFS_CMAKE}"; then

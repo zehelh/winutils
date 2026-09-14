@@ -38,8 +38,8 @@ Native DLLs must match both the Hadoop version and the JDK used at runtime.
 | Release JARs      | Apache tarball `hadoop-<version>.tar.gz`      |
 | Native sources    | Same git ref as the release (`versions.conf`) |
 | JNI headers       | OpenJDK 17 (Linux build host)                 |
-| `jvm.lib` link    | Temurin 17 x64 Windows                        |
-| Runtime (Windows) | **Temurin 17 x64** (e.g. PySpark)             |
+| `jvm.lib` link    | Temurin **17.0.20.1** x64 Windows             |
+| Runtime (Windows) | **Same Temurin build** (e.g. 17.0.20.1 + PySpark) |
 
 After each build, check `hadoop-<version>/.winutils-build-meta` for the exact versions used.
 
@@ -83,10 +83,38 @@ If a version is missing from `versions.conf`, the default ref is `rel/release-<v
 Use the **same JDK major version** as the build (Temurin 17 x64):
 
 ```cmd
-set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.13.11-hotspot
+set JAVA_HOME=C:\Program Files\Eclipse Adoptium\jdk-17.0.20.1-hotspot
 set HADOOP_HOME=C:\path\to\hadoop-3.4.1
 set PATH=%HADOOP_HOME%\bin;%JAVA_HOME%\bin;%PATH%
 ```
+
+Use the **exact Temurin version** recorded in `hadoop-<version>/.winutils-build-meta` (`jdk_win_temurin`).
+
+## GitHub Actions (native Windows build)
+
+If JNI still fails with Docker/Wine artifacts (`class (null)`, `LoadLibrary` errors), use a **native Windows** build — the same approach as [steveloughran/winutils](https://github.com/steveloughran/winutils) (real MSVC + Maven `-Pnative-win`, single JDK for compile and link).
+
+1. Push this repo to GitHub
+2. **Actions** → **Build Windows Native** → **Run workflow**
+3. Download the `hadoop-<version>-windows-native` artifact
+
+Local Windows (Git Bash + Temurin 17 + Maven + VS Build Tools):
+
+```bash
+export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-17.0.20.1-hotspot"
+bash scripts/build-windows-native.sh 3.4.1
+```
+
+### GitHub Actions pricing
+
+| Repo type | Cost |
+| --------- | ---- |
+| **Public** | Standard GitHub-hosted runners are **free** (fair-use limits apply) |
+| **Private** (free plan) | **2,000 minutes/month**; Windows runners bill at **2×** (1 min ≈ 2 min quota) |
+
+A native Hadoop build typically takes **60–120 min** on `windows-latest` (vcpkg + Maven). Fine for occasional public-repo builds; watch quota on private repos.
+
+The Docker/Wine path remains available for local Linux builds without using CI minutes.
 
 PySpark example:
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build hdfs.dll on native Windows (CMake + Ninja + MSVC). Same approach as docker/build-hdfs-dll.sh.
+# Build hdfs.dll on native Windows (CMake + Ninja + MSVC).
 set -euo pipefail
 
 export MSYS2_PATH_TYPE="${MSYS2_PATH_TYPE:-inherit}"

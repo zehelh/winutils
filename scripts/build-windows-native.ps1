@@ -1,4 +1,4 @@
-# Native Windows build for winutils (local server / no Docker / no GHA timeout).
+# Native Windows build for winutils (local server or self-hosted runner).
 # Run from: x64 Native Tools PowerShell for VS 2022 (or this script loads vcvars64).
 #
 # Usage:

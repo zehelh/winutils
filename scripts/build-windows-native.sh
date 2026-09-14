@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Native Windows build (GitHub Actions windows-latest or local Git Bash).
-# Same output layout as Docker/Wine build: release tarball + native overlay (lite).
+# Native Windows build (self-hosted runner or local Git Bash + MSVC).
+# Output: official Apache release tarball + native overlay (lite or full).
 set -euo pipefail
 
 # Git for Windows: preserve Windows PATH (MSBuild, cl.exe) inside bash.
@@ -20,7 +20,7 @@ fi
 HADOOP_HOME="${REPO_ROOT}/hadoop-${HADOOP_VERSION}"
 REF_FILE="${REPO_ROOT}/.hadoop-src-ref"
 VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
-# Native Windows: recent vcpkg (VS 2022). Docker/Wine keeps 7ffa425 in docker/Dockerfile.
+# Recent vcpkg tag (VS 2022). See https://github.com/microsoft/vcpkg/releases
 # MSYS2 packages expire on mirrors; use a recent vcpkg tag (see https://github.com/microsoft/vcpkg/releases).
 VCPKG_COMMIT="${VCPKG_COMMIT:-2026.06.24}"
 CACHE_DIR="${REPO_ROOT}/.cache/hadoop-releases"
@@ -162,7 +162,7 @@ run_maven_native() {
     -Dwindows.no.sasl=on \
     -Duse.platformToolsetVersion=v143
 
-  echo "[win] hdfs.dll via CMake/Ninja (skip Maven msbuild — docker-style)"
+  echo "[win] hdfs.dll via CMake/Ninja"
   bash "${REPO_ROOT}/scripts/build-hdfs-dll-native.sh"
 }
 
@@ -207,7 +207,7 @@ HDFS_BIN="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/target/bin
 }
 
 export HADOOP_DIST_PROFILE="${HADOOP_DIST_PROFILE:-lite}"
-bash "${REPO_ROOT}/docker/assemble-from-release.sh" \
+bash "${REPO_ROOT}/scripts/assemble-from-release.sh" \
   "${HADOOP_VERSION}" \
   "${HADOOP_HOME}" \
   "${COMMON_BIN}" \

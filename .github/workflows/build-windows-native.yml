@@ -1,4 +1,4 @@
-# Native Windows build (no Wine). Output: hadoop-<version>/ (same layout as ./build.sh).
+# Native Windows build. Output: hadoop-<version>/ (HADOOP_HOME layout).
 # Callable manually, from check-hadoop-releases.yml, or via workflow_dispatch.
 name: Build Windows Native
 
@@ -81,7 +81,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: C:/vcpkg
-          key: vcpkg-win-2026.06.24-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
+          key: vcpkg-win-2026.06.24-${{ hashFiles('scripts/build-windows-native.sh', 'scripts/build-hdfs-dll-native.sh') }}
           restore-keys: |
             vcpkg-win-
 

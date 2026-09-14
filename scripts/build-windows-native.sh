@@ -3,6 +3,9 @@
 # Same output layout as Docker/Wine build: release tarball + native overlay (lite).
 set -euo pipefail
 
+# Git for Windows: preserve Windows PATH (MSBuild, cl.exe) inside bash.
+export MSYS2_PATH_TYPE="${MSYS2_PATH_TYPE:-inherit}"
+
 HADOOP_VERSION="${1:-3.4.1}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSIONS_FILE="${REPO_ROOT}/versions.conf"

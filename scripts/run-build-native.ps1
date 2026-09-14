@@ -5,6 +5,10 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
+
+# Reload MSVC into this process (GITHUB_ENV PATH may not propagate fully into Git Bash).
+& (Join-Path $scriptDir "setup-msvc-env.ps1")
 
 if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue)) {
     throw "[build] msbuild missing - Setup Windows toolchain step failed"
@@ -12,7 +16,7 @@ if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue)) {
 
 $bash = $env:SHELL_EXECUTABLE
 if (-not $bash -or -not (Test-Path $bash)) {
-    . (Join-Path (Split-Path -Path $MyInvocation.MyCommand.Path -Parent) "ps-paths.ps1")
+    . (Join-Path $scriptDir "ps-paths.ps1")
     Refresh-RunnerPath
     $bash = Find-GitBash
 }
@@ -20,13 +24,17 @@ if (-not $bash) {
     throw "[build] Git Bash not found (set SHELL_EXECUTABLE or install Git for Windows)"
 }
 
-Write-Host "[build] bash: $bash"
-Write-Host "[build] msbuild: $(cmd /c 'msbuild -version 2>&1 & exit /b 0' | Select-Object -First 1)"
+# Git Bash: keep Windows PATH entries (MSBuild, cl.exe live there).
+$env:MSYS2_PATH_TYPE = "inherit"
+$env:SHELL_EXECUTABLE = $bash
 
-$repo = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { Split-Path (Split-Path $MyInvocation.MyCommand.Path -Parent) -Parent }
+Write-Host "[build] bash: $bash"
+Write-Host "[build] msbuild: $(cmd /c 'msbuild.exe -version 2>&1 & exit /b 0' | Select-Object -First 1)"
+
+$repo = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { Split-Path $scriptDir -Parent }
 Push-Location $repo
 try {
-    & $bash -eo pipefail ./scripts/invoke-build-native.sh $HadoopVersion
+    & $bash -eo pipefail ./scripts/build-windows-native.sh $HadoopVersion
     exit $LASTEXITCODE
 } finally {
     Pop-Location

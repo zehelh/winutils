@@ -122,30 +122,41 @@ function Find-BashExe {
 }
 
 function Invoke-MavenNative {
-    Write-Step "Maven native-win (hadoop-common + hdfs-native-client)"
     $vcpkgPrefix = Join-Path $VcpkgRoot "installed\x64-windows"
     $toolchain = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
     $bash = Find-BashExe
     $env:MAVEN_OPTS = if ($env:MAVEN_OPTS) { $env:MAVEN_OPTS } else { "-Xmx4096M -Xss128M" }
+    $mavenCommon = @(
+        "-Pnative-win",
+        "-Dhttps.protocols=TLSv1.2",
+        "-DskipTests",
+        "-DskipDocs",
+        "-Dshell-executable=$bash",
+        "-Drequire.openssl",
+        "-Dopenssl.prefix=$vcpkgPrefix",
+        "-Dcmake.prefix.path=$vcpkgPrefix",
+        "-Dwindows.cmake.toolchain.file=$toolchain",
+        "-Dwindows.cmake.build.type=RelWithDebInfo",
+        "-Dwindows.build.hdfspp.dll=off",
+        "-Dwindows.no.sasl=on",
+        "-Duse.platformToolsetVersion=v143"
+    )
     Push-Location $HadoopSrc
     try {
+        Write-Step "Maven native-win (hadoop-common)"
         mvn --batch-mode clean package `
-            -pl hadoop-common-project/hadoop-common,hadoop-hdfs-project/hadoop-hdfs-native-client `
+            -pl hadoop-common-project/hadoop-common `
             -am `
-            -Pnative-win `
-            -Dhttps.protocols=TLSv1.2 `
-            -DskipTests `
-            -DskipDocs `
-            "-Dshell-executable=$bash" `
-            -Drequire.openssl `
-            "-Dopenssl.prefix=$vcpkgPrefix" `
-            "-Dcmake.prefix.path=$vcpkgPrefix" `
-            "-Dwindows.cmake.toolchain.file=$toolchain" `
-            -Dwindows.cmake.build.type=RelWithDebInfo `
-            -Dwindows.build.hdfspp.dll=off `
-            -Dwindows.no.sasl=on `
-            -Duse.platformToolsetVersion=v143
-        if ($LASTEXITCODE -ne 0) { throw "Maven build failed" }
+            @mavenCommon
+        if ($LASTEXITCODE -ne 0) { throw "Maven hadoop-common build failed" }
+
+        Write-Step "Maven native-win (hdfs.dll only)"
+        mvn --batch-mode clean package `
+            -pl hadoop-hdfs-project/hadoop-hdfs-native-client `
+            -am `
+            @mavenCommon `
+            "-Dnative_cmake_args=-DBUILD_SHARED_HDFSPP=OFF -DNO_SASL=ON"
+        if ($LASTEXITCODE -ne 0) { throw "Maven hdfs-native-client build failed" }
     } finally {
         Pop-Location
     }
@@ -195,8 +206,9 @@ $bash = $env:SHELL_EXECUTABLE
 if (-not $bash) { $bash = (Find-GitBash) }
 if ($bash) {
     & $bash (Join-Path $ScriptDir "patch-hadoop-winutils-sdk.sh") $HadoopSrc
+    & $bash (Join-Path $ScriptDir "patch-hadoop-hdfs-lite.sh") $HadoopSrc
 } else {
-    Write-Warning "[patch] Git Bash not found - skipping SDK patch script"
+    Write-Warning "[patch] Git Bash not found - skipping Hadoop patch scripts"
 }
 
 Setup-Vcpkg

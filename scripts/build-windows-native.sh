@@ -144,9 +144,9 @@ run_maven_native() {
 
   cd "${HADOOP_SRC}"
 
-  echo "[win] Maven: hadoop-common + hdfs-native-client (native-win)"
+  echo "[win] Maven: hadoop-common (native-win)"
   mvn --batch-mode clean package \
-    -pl hadoop-common-project/hadoop-common,hadoop-hdfs-project/hadoop-hdfs-native-client \
+    -pl hadoop-common-project/hadoop-common \
     -am \
     -Pnative-win \
     -Dhttps.protocols=TLSv1.2 \
@@ -161,6 +161,25 @@ run_maven_native() {
     -Dwindows.build.hdfspp.dll=off \
     -Dwindows.no.sasl=on \
     -Duse.platformToolsetVersion=v143
+
+  echo "[win] Maven: hdfs-native-client (hdfs.dll only, patched msbuild target)"
+  mvn --batch-mode clean package \
+    -pl hadoop-hdfs-project/hadoop-hdfs-native-client \
+    -am \
+    -Pnative-win \
+    -Dhttps.protocols=TLSv1.2 \
+    -DskipTests \
+    -DskipDocs \
+    -Dshell-executable="${SHELL_EXECUTABLE:-bash.exe}" \
+    -Drequire.openssl \
+    -Dopenssl.prefix="${vcpkg_prefix}" \
+    -Dcmake.prefix.path="${vcpkg_prefix}" \
+    -Dwindows.cmake.toolchain.file="${toolchain}" \
+    -Dwindows.cmake.build.type=RelWithDebInfo \
+    -Dwindows.build.hdfspp.dll=off \
+    -Dwindows.no.sasl=on \
+    -Duse.platformToolsetVersion=v143 \
+    -Dnative_cmake_args="-DBUILD_SHARED_HDFSPP=OFF -DNO_SASL=ON"
 }
 
 write_build_meta() {
@@ -187,6 +206,7 @@ java -version
 
 clone_hadoop
 bash "${REPO_ROOT}/scripts/patch-hadoop-winutils-sdk.sh" "${HADOOP_SRC}"
+bash "${REPO_ROOT}/scripts/patch-hadoop-hdfs-lite.sh" "${HADOOP_SRC}"
 setup_vcpkg
 run_maven_native
 

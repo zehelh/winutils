@@ -53,10 +53,6 @@ jobs:
       DIST_PROFILE: ${{ inputs.dist_profile }}
       CREATE_RELEASE: ${{ inputs.create_release }}
 
-    defaults:
-      run:
-        shell: bash
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -96,6 +92,7 @@ jobs:
           key: hadoop-releases-${{ inputs.hadoop_version }}
 
       - name: Build native + assemble
+        shell: powershell
         env:
           CI: true
           GITHUB_ACTIONS: true
@@ -103,10 +100,7 @@ jobs:
           HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
           VCPKG_ROOT: C:/vcpkg
         run: |
-          command -v msbuild.exe || { echo "msbuild missing - Setup Windows toolchain step failed" >&2; exit 1; }
-          msbuild -version | head -1
-          chmod +x scripts/build-windows-native.sh docker/assemble-from-release.sh docker/overlay-native-bin.sh docker/verify-cdarlint-bin.sh
-          bash scripts/build-windows-native.sh "${{ inputs.hadoop_version }}"
+          & "${{ github.workspace }}/scripts/run-build-native.ps1" -HadoopVersion "${{ inputs.hadoop_version }}"
 
       - name: Create distribution zip
         shell: powershell
@@ -129,17 +123,22 @@ jobs:
       - name: Check existing GitHub Release
         id: release_check
         if: inputs.create_release
-        shell: bash
+        shell: powershell
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="hadoop-${{ inputs.hadoop_version }}"
-          if command -v gh >/dev/null 2>&1 && gh release view "${tag}" >/dev/null 2>&1; then
-            echo "exists=true" >> "${GITHUB_OUTPUT}"
-            echo "Release ${tag} already exists — skip publish"
-          else
-            echo "exists=false" >> "${GITHUB_OUTPUT}"
-          fi
+          $tag = "hadoop-${{ inputs.hadoop_version }}"
+          $exists = $false
+          if (Get-Command gh -ErrorAction SilentlyContinue) {
+            gh release view $tag 2>$null | Out-Null
+            if ($LASTEXITCODE -eq 0) { $exists = $true }
+          }
+          if ($exists) {
+            "exists=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "Release $tag already exists - skip publish"
+          } else {
+            "exists=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          }
 
       - name: Publish GitHub Release
         if: inputs.create_release && steps.release_check.outputs.exists != 'true'

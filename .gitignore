@@ -1,3 +1,4 @@
 hadoop-src/
 .cache/
 *.log
+scripts/win-bin/*.cmd

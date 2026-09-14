@@ -6,9 +6,12 @@ param(
 
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
+. (Join-Path $scriptDir "ps-paths.ps1")
+Initialize-WinutilsPaths -CallerPath $MyInvocation.MyCommand.Path
 
 # Reload MSVC into this process (GITHUB_ENV PATH may not propagate fully into Git Bash).
 & (Join-Path $scriptDir "setup-msvc-env.ps1")
+Ensure-PythonPath
 
 if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue)) {
     throw "[build] msbuild missing - Setup Windows toolchain step failed"

@@ -66,6 +66,8 @@ if (-not $bash) {
 }
 Write-Host "[toolchain] bash: $bash"
 
+Ensure-PythonPath -ExportToGitHubEnv:$ExportToGitHubEnv
+
 if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
     Add-Content -Path $env:GITHUB_ENV -Value "SHELL_EXECUTABLE=$bash"
 }

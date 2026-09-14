@@ -96,3 +96,88 @@ function Find-GitBash {
 
     return $null
 }
+
+function Find-PythonExe {
+    # Windows installs python.exe (not always python3). Search common layout + py launcher.
+    $candidates = @()
+
+    foreach ($root in @(
+        (Join-Path $env:LOCALAPPDATA "Programs\Python")
+        (Join-Path ${env:ProgramFiles} "Python312")
+        (Join-Path ${env:ProgramFiles(x86)} "Python312")
+    )) {
+        if (-not (Test-Path $root)) { continue }
+        if (Test-Path (Join-Path $root "python.exe")) {
+            $candidates += (Join-Path $root "python.exe")
+        }
+        Get-ChildItem -Path $root -Directory -Filter "Python*" -ErrorAction SilentlyContinue | ForEach-Object {
+            $exe = Join-Path $_.FullName "python.exe"
+            if (Test-Path $exe) { $candidates += $exe }
+        }
+    }
+
+    $pyCmd = Get-Command py.exe -ErrorAction SilentlyContinue
+    if ($pyCmd) {
+        $candidates += "py.exe|-3"
+    }
+
+    foreach ($entry in ($candidates | Select-Object -Unique)) {
+        if ($entry -like "py.exe|*") {
+            return $entry
+        }
+        if ($entry -and (Test-Path -Path $entry)) {
+            return $entry
+        }
+    }
+
+    return $null
+}
+
+function Ensure-PythonPath {
+    param([switch]$ExportToGitHubEnv)
+
+    if (Get-Command python3.exe -ErrorAction SilentlyContinue) {
+        Write-Host "[toolchain] python3: $(Get-Command python3.exe).Source"
+        return
+    }
+
+    $found = Find-PythonExe
+    if (-not $found) {
+        Write-Warning "[toolchain] Python not found (optional for winutils build; patch scripts use awk/sed)"
+        return
+    }
+
+    if ($found -like "py.exe|*") {
+        $shimDir = Join-Path $script:WinutilsScriptDir "win-bin"
+        New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+        $py3 = Join-Path $shimDir "python3.cmd"
+        @(
+            '@echo off',
+            'py -3 %*'
+        ) | Set-Content -Path $py3 -Encoding ASCII
+        $env:Path = "$shimDir;$env:Path"
+        Write-Host "[toolchain] python3 shim: $py3 (via py -3)"
+    } else {
+        $pyHome = Split-Path -Path $found -Parent
+        $pyScripts = Join-Path $pyHome "Scripts"
+        $paths = @($pyHome)
+        if (Test-Path $pyScripts) { $paths += $pyScripts }
+        $shimDir = Join-Path $script:WinutilsScriptDir "win-bin"
+        New-Item -ItemType Directory -Force -Path $shimDir | Out-Null
+        if (-not (Test-Path (Join-Path $pyHome "python3.exe"))) {
+            $py3 = Join-Path $shimDir "python3.cmd"
+            @(
+                '@echo off',
+                "`"$found`" %*"
+            ) | Set-Content -Path $py3 -Encoding ASCII
+            $paths = @($shimDir) + $paths
+            Write-Host "[toolchain] python3 shim: $py3 -> $found"
+        }
+        $env:Path = (($paths -join ";") + ";" + $env:Path)
+        Write-Host "[toolchain] python: $found"
+    }
+
+    if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
+        Add-Content -Path $env:GITHUB_ENV -Value "PATH=$env:Path"
+    }
+}

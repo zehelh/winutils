@@ -6,8 +6,10 @@ set -euo pipefail
 HADOOP_VERSION="${1:-3.4.1}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSIONS_FILE="${REPO_ROOT}/versions.conf"
-# GHA: short path required (Hadoop BUILDING.txt — avoid MAX_PATH; default workspace is too deep).
+# Short path on Windows (Hadoop BUILDING.txt — avoid MAX_PATH).
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  HADOOP_SRC="${HADOOP_SRC:-/c/hadoop-src}"
+elif [[ "${OS:-}" == "Windows_NT" ]]; then
   HADOOP_SRC="${HADOOP_SRC:-/c/hadoop-src}"
 else
   HADOOP_SRC="${HADOOP_SRC:-${REPO_ROOT}/hadoop-src}"
@@ -87,12 +89,22 @@ setup_vcpkg() {
   fi
 }
 
+require_msbuild() {
+  if command -v msbuild.exe &>/dev/null || command -v MSBuild.exe &>/dev/null; then
+    return 0
+  fi
+  echo "[win] Error: msbuild not in PATH (Visual Studio C++ Build Tools required)" >&2
+  echo "[win] On self-hosted runners, run: pwsh scripts/setup-windows-runner.ps1" >&2
+  exit 1
+}
+
 run_maven_native() {
   local vcpkg_prefix toolchain
   vcpkg_prefix="${VCPKG_ROOT}/installed/x64-windows"
   toolchain="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
 
-  export MAVEN_OPTS="${MAVEN_OPTS:--Xmx2048M -Xss128M}"
+  require_msbuild
+  export MAVEN_OPTS="${MAVEN_OPTS:--Xmx4096M -Xss128M}"
 
   cd "${HADOOP_SRC}"
 

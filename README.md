@@ -94,9 +94,50 @@ Use the **exact Temurin version** recorded in `hadoop-<version>/.winutils-build-
 
 If JNI still fails with Docker/Wine artifacts (`class (null)`, `LoadLibrary` errors), use a **native Windows** build — the same approach as [steveloughran/winutils](https://github.com/steveloughran/winutils) (real MSVC + Maven `-Pnative-win`, single JDK for compile and link).
 
+The workflow targets a **self-hosted Windows runner** (`runs-on: [self-hosted, Windows, X64]`). Step `Setup Windows toolchain` loads MSVC (`msbuild`, `cl`), installs Maven if missing, and enables long paths.
+
 1. Push this repo to GitHub
 2. **Actions** → **Build Windows Native** → **Run workflow**
-3. Download the `hadoop-<version>-windows-native` artifact
+3. Download the artifact **or** the **GitHub Release** (if `create_release` is enabled)
+
+### Self-hosted Windows server (minimal install)
+
+Only **two** manual installs are required on the server; the workflow handles the rest:
+
+| Install manually | Why |
+|------------------|-----|
+| **Visual Studio 2022 Build Tools** + *Desktop development with C++* | MSVC / MSBuild (cannot be automated reliably in CI) |
+| **Git for Windows** | checkout, clone Hadoop, Git Bash for Maven |
+
+Optional: `winget install GitHub.cli` (release duplicate check).
+
+The workflow auto-installs: **Temurin JDK 17**, **Apache Maven** (into tool cache), **vcpkg** + packages, Hadoop sources.
+
+Register the runner with labels `self-hosted`, `Windows`, `X64` (default). Re-run the workflow after pushing workflow updates.
+
+### GitHub Releases (variable version)
+
+Each successful native build can publish:
+
+| Item | Example |
+|------|---------|
+| Tag | `hadoop-3.4.1` |
+| Asset | `hadoop-3.4.1.zip` → contains `hadoop-3.4.1/` (same layout as local build) |
+| Manual run | **Build Windows Native** → set version + `create_release: true` |
+
+No PR is created; binaries are attached to the Release (not committed to git).
+
+### Auto-build when Apache publishes a new Hadoop
+
+Workflow **Check Hadoop Releases** (daily cron + manual):
+
+1. Scans [Apache Hadoop downloads](https://downloads.apache.org/hadoop/common/)
+2. Compares with existing GitHub Releases (`hadoop-<version>` tags)
+3. Triggers **Build Windows Native** for missing versions (default: **1** build per run)
+
+Manual test: **Actions** → **Check Hadoop Releases** → **Run workflow**.
+
+Configure `MIN_VERSION` / `max_builds` in the workflow dispatch inputs. Git ref for builds uses `versions.conf` or defaults to `rel/release-<version>`.
 
 Local Windows (Git Bash + Temurin 17 + Maven + VS Build Tools):
 
@@ -105,6 +146,42 @@ export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-17.0.20.1-hotspot"
 bash scripts/build-windows-native.sh 3.4.1
 ```
 
+### Windows server (PowerShell, recommended for long builds)
+
+Use this on a dedicated Windows machine when GitHub Actions times out (~2 h) or you need more RAM/CPU. No Docker, no Git Bash required (Git for Windows is still recommended for Maven shell scripts).
+
+**Prerequisites** (manual install only)
+
+| Tool | Notes |
+|------|-------|
+| Visual Studio 2022 Build Tools | **Desktop development with C++**, MSVC v143 |
+| Git for Windows | includes Git Bash |
+| [Temurin JDK 17 x64](https://adoptium.net/) | Set `JAVA_HOME` (GHA installs it via `setup-java`) |
+| ~30 GB disk | Sources + vcpkg + Maven cache |
+
+Maven is auto-installed by `scripts/ensure-maven.ps1` if missing.
+
+Clone the repo, then from **x64 Native Tools PowerShell for VS 2022** (or plain PowerShell — the script loads `vcvars64` automatically):
+
+```powershell
+cd C:\path\to\winutils
+$env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.20.1-hotspot"
+.\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -DistProfile lite -CreateZip
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `-HadoopVersion` | `3.4.1` | Target Hadoop release |
+| `-DistProfile` | `lite` | `lite` or `full` |
+| `-HadoopSrc` | `C:\hadoop-src` | Short clone path (avoids MAX_PATH) |
+| `-CreateZip` | off | Also writes `hadoop-<version>.zip` |
+| `-SkipVcpkg` | off | Reuse existing vcpkg install |
+| `-SkipMaven` | off | Only assemble (native DLLs already built) |
+
+First run: vcpkg packages (~30–60 min) + Maven native-win (~60–90 min). Subsequent runs reuse caches under `.cache\` and `C:\hadoop-src`.
+
+Output: `hadoop-<version>\` (same layout as Docker/GHA) + optional zip.
+
 ### GitHub Actions pricing
 
 | Repo type | Cost |
@@ -112,7 +189,7 @@ bash scripts/build-windows-native.sh 3.4.1
 | **Public** | Standard GitHub-hosted runners are **free** (fair-use limits apply) |
 | **Private** (free plan) | **2,000 minutes/month**; Windows runners bill at **2×** (1 min ≈ 2 min quota) |
 
-A native Hadoop build typically takes **60–120 min** on `windows-latest` (vcpkg + Maven). Fine for occasional public-repo builds; watch quota on private repos.
+A native Hadoop build typically takes **60–120 min** on `windows-latest` (vcpkg + Maven), but can exceed **2 h** and hit runner timeouts. The workflow timeout is **360 min**; for reliability, prefer a local Windows server with `build-windows-native.ps1`. Fine for occasional public-repo builds; watch quota on private repos.
 
 The Docker/Wine path remains available for local Linux builds without using CI minutes.
 
@@ -147,6 +224,8 @@ Log out and back in after adding yourself to the `docker` group.
 ```
 build.sh
 versions.conf
+scripts/build-windows-native.ps1
+scripts/build-windows-native.sh
 docker/
 hadoop-<version>/          # HADOOP_HOME output
 hadoop-<version>/.winutils-build-meta

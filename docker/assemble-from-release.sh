@@ -2,6 +2,8 @@
 # Full HADOOP_HOME: Apache release tarball + native winutils.exe / hadoop.dll / hdfs.dll overlay.
 set -euo pipefail
 
+DOCKER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 HADOOP_VERSION="${1:?HADOOP_VERSION required}"
 HADOOP_HOME="${2:?HADOOP_HOME required}"
 COMMON_BIN="${3:?COMMON_BIN (hadoop-common target/bin) required}"
@@ -78,7 +80,7 @@ tar -xzf "${TARBALL_PATH}" -C "${PARENT_DIR}"
 
 overlay_dirs=("${COMMON_BIN}")
 [[ -n "${HDFS_BIN}" && -d "${HDFS_BIN}" ]] && overlay_dirs+=("${HDFS_BIN}")
-bash /docker/overlay-native-bin.sh "${HADOOP_HOME}/bin" "${overlay_dirs[@]}"
+bash "${DOCKER_DIR}/overlay-native-bin.sh" "${HADOOP_HOME}/bin" "${overlay_dirs[@]}"
 
 trim_lite() {
   local before after saved
@@ -116,7 +118,7 @@ case "${DIST_PROFILE}" in
     ;;
 esac
 
-bash /docker/verify-cdarlint-bin.sh "${HADOOP_HOME}/bin"
+bash "${DOCKER_DIR}/verify-cdarlint-bin.sh" "${HADOOP_HOME}/bin"
 
 for req in \
   "${HADOOP_HOME}/libexec/hadoop-config.cmd" \

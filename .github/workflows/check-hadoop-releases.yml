@@ -1,0 +1,67 @@
+# Poll Apache Hadoop releases and trigger native Windows builds for missing versions.
+name: Check Hadoop Releases
+
+on:
+  schedule:
+    # Daily at 06:00 UTC
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      min_version:
+        description: Minimum Hadoop version to consider (semver)
+        required: true
+        default: "3.4.0"
+        type: string
+      max_builds:
+        description: Max new builds to trigger per run
+        required: true
+        default: "1"
+        type: string
+      dist_profile:
+        description: Distribution profile passed to build workflow
+        required: true
+        default: lite
+        type: choice
+        options:
+          - lite
+          - full
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.detect.outputs.versions }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Detect unpublished Hadoop releases
+        id: detect
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MIN_VERSION: ${{ inputs.min_version || '3.4.0' }}
+          MAX_BUILDS: ${{ inputs.max_builds || '1' }}
+        run: |
+          chmod +x scripts/detect-hadoop-releases.sh
+          versions="$(bash scripts/detect-hadoop-releases.sh)"
+          echo "versions=${versions}" >> "${GITHUB_OUTPUT}"
+          echo "Pending builds: ${versions}"
+
+  build:
+    needs: detect
+    if: needs.detect.outputs.versions != '[]'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        version: ${{ fromJson(needs.detect.outputs.versions) }}
+    uses: ./.github/workflows/build-windows-native.yml
+    with:
+      hadoop_version: ${{ matrix.version }}
+      dist_profile: ${{ inputs.dist_profile || 'lite' }}
+      create_release: true
+    secrets: inherit

@@ -1,110 +1,161 @@
-# Native Windows build (no Wine). Same hadoop-<version>/ layout as ./build.sh
-# Refs:
-#   - https://docs.github.com/en/actions/how-tos/writing-workflows/building-and-testing/building-and-testing-java-with-maven
-#   - https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#defaultsrunshell
-#   - https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md
-# Note: there is NO official actions/setup-maven — Maven is preinstalled on windows-latest.
-name: Build Windows Native
-
-on:
-  workflow_dispatch:
-    inputs:
-      hadoop_version:
-        description: Hadoop version
-        required: true
-        default: "3.4.1"
-        type: string
-      dist_profile:
-        description: Distribution profile (lite or full)
-        required: true
-        default: lite
-        type: choice
-        options:
-          - lite
-          - full
-
-permissions:
-  contents: read
-
-jobs:
-  build:
-    runs-on: windows-latest
-    timeout-minutes: 180
-
-    defaults:
-      run:
-        shell: bash
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Temurin JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          # SemVer: 17.0.20.1 is invalid (4 segments). 17.0.20 resolves Temurin 17.0.20.x
-          java-version: "17.0.20"
-          architecture: x64
-          # No cache:maven here — setup-java requires pom.xml in this repo (Hadoop is cloned later).
-
-      - name: Cache Maven repository
-        uses: actions/cache@v4
-        with:
-          path: ~/.m2/repository
-          key: maven-win-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
-          restore-keys: |
-            maven-win-
-
-      - name: Verify toolchain
-        run: |
-          java -version
-          echo "JAVA_HOME=$JAVA_HOME"
-          mvn -version
-          git --version
-
-      - name: Enable Windows long paths for Git
-        shell: pwsh
-        run: |
-          git config --global core.longpaths true
-          $key = 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem'
-          $prop = Get-ItemProperty -Path $key -Name LongPathsEnabled -ErrorAction SilentlyContinue
-          if ($null -eq $prop -or $prop.LongPathsEnabled -ne 1) {
-            Set-ItemProperty -Path $key -Name LongPathsEnabled -Value 1 -Force
-            Write-Host "LongPathsEnabled set to 1"
-          } else {
-            Write-Host "LongPathsEnabled already 1"
-          }
-
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: C:/vcpkg
-          key: vcpkg-win-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
-          restore-keys: |
-            vcpkg-win-
-
-      - name: Cache Hadoop release tarballs
-        uses: actions/cache@v4
-        with:
-          path: .cache/hadoop-releases
-          key: hadoop-releases-${{ inputs.hadoop_version }}
-
-      - name: Build native + assemble
-        env:
-          CI: true
-          GITHUB_ACTIONS: true
-          HADOOP_SRC: C:/hadoop-src
-          HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
-          VCPKG_ROOT: C:/vcpkg
-          SHELL_EXECUTABLE: bash.exe
-        run: |
-          chmod +x scripts/build-windows-native.sh docker/assemble-from-release.sh docker/overlay-native-bin.sh docker/verify-cdarlint-bin.sh
-          bash scripts/build-windows-native.sh "${{ inputs.hadoop_version }}"
-
-      - name: Upload HADOOP_HOME artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: hadoop-${{ inputs.hadoop_version }}-windows-native
-          path: hadoop-${{ inputs.hadoop_version }}/
-          retention-days: 14
+# Native Windows build (no Wine). Output: hadoop-<version>/ (same layout as ./build.sh).
+# Callable manually, from check-hadoop-releases.yml, or via workflow_dispatch.
+name: Build Windows Native
+
+on:
+  workflow_dispatch:
+    inputs:
+      hadoop_version:
+        description: Hadoop version (e.g. 3.4.1)
+        required: true
+        default: "3.4.1"
+        type: string
+      dist_profile:
+        description: Distribution profile
+        required: true
+        default: lite
+        type: choice
+        options:
+          - lite
+          - full
+      create_release:
+        description: Publish GitHub Release with zip asset
+        required: true
+        default: true
+        type: boolean
+
+  workflow_call:
+    inputs:
+      hadoop_version:
+        required: true
+        type: string
+      dist_profile:
+        required: false
+        type: string
+        default: lite
+      create_release:
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    # Self-hosted Windows server (labels from runner registration).
+    # Change to windows-latest to use GitHub-hosted runners instead.
+    runs-on: [self-hosted, Windows, X64]
+    timeout-minutes: 360
+
+    env:
+      HADOOP_VERSION: ${{ inputs.hadoop_version }}
+      DIST_PROFILE: ${{ inputs.dist_profile }}
+      CREATE_RELEASE: ${{ inputs.create_release }}
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Temurin JDK 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17.0.20"
+          architecture: x64
+
+      - name: Setup Windows toolchain (MSVC, Maven, paths)
+        shell: pwsh
+        run: |
+          & "${{ github.workspace }}/scripts/setup-windows-runner.ps1" -ExportToGitHubEnv
+
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-win-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
+          restore-keys: |
+            maven-win-
+
+      - name: Cache vcpkg
+        uses: actions/cache@v4
+        with:
+          path: C:/vcpkg
+          key: vcpkg-win-${{ hashFiles('docker/Dockerfile', 'scripts/build-windows-native.sh') }}
+          restore-keys: |
+            vcpkg-win-
+
+      - name: Cache Hadoop release tarballs
+        uses: actions/cache@v4
+        with:
+          path: .cache/hadoop-releases
+          key: hadoop-releases-${{ inputs.hadoop_version }}
+
+      - name: Build native + assemble
+        env:
+          CI: true
+          GITHUB_ACTIONS: true
+          HADOOP_SRC: C:/hadoop-src
+          HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
+          VCPKG_ROOT: C:/vcpkg
+        run: |
+          command -v msbuild.exe || { echo "msbuild missing — Setup Windows toolchain step failed" >&2; exit 1; }
+          msbuild -version | head -1
+          chmod +x scripts/build-windows-native.sh docker/assemble-from-release.sh docker/overlay-native-bin.sh docker/verify-cdarlint-bin.sh
+          bash scripts/build-windows-native.sh "${{ inputs.hadoop_version }}"
+
+      - name: Create distribution zip
+        shell: pwsh
+        run: |
+          $ver = "${{ inputs.hadoop_version }}"
+          $zip = "hadoop-$ver.zip"
+          if (Test-Path $zip) { Remove-Item $zip -Force }
+          Compress-Archive -Path "hadoop-$ver" -DestinationPath $zip -CompressionLevel Optimal
+          Get-Item $zip | Format-List Name, Length
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hadoop-${{ inputs.hadoop_version }}-windows-native
+          path: |
+            hadoop-${{ inputs.hadoop_version }}/
+            hadoop-${{ inputs.hadoop_version }}.zip
+          retention-days: 14
+
+      - name: Check existing GitHub Release
+        id: release_check
+        if: inputs.create_release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="hadoop-${{ inputs.hadoop_version }}"
+          if command -v gh >/dev/null 2>&1 && gh release view "${tag}" >/dev/null 2>&1; then
+            echo "exists=true" >> "${GITHUB_OUTPUT}"
+            echo "Release ${tag} already exists — skip publish"
+          else
+            echo "exists=false" >> "${GITHUB_OUTPUT}"
+          fi
+
+      - name: Publish GitHub Release
+        if: inputs.create_release && steps.release_check.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: hadoop-${{ inputs.hadoop_version }}
+          name: Hadoop ${{ inputs.hadoop_version }} — Windows native (winutils)
+          body: |
+            Windows `HADOOP_HOME` for [Apache Hadoop ${{ inputs.hadoop_version }}](https://hadoop.apache.org/).
+
+            **Contents** (same layout as [cdarlint/winutils](https://github.com/cdarlint/winutils)):
+            - `hadoop-${{ inputs.hadoop_version }}/` — lite/full distribution (`${{ inputs.dist_profile }}`)
+            - Native: `winutils.exe`, `hadoop.dll`, `hdfs.dll`
+            - JDK build: Temurin 17.0.20.x (use same major at runtime)
+
+            Extract the zip and set `HADOOP_HOME` to the `hadoop-${{ inputs.hadoop_version }}` folder.
+          files: hadoop-${{ inputs.hadoop_version }}.zip
+          fail_on_unmatched_files: true
+

@@ -10,6 +10,24 @@ $_this = $MyInvocation.MyCommand.Path
 if (-not $_this) { throw "Run: .\scripts\setup-windows-runner.ps1" }
 . (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
 Initialize-WinutilsPaths -CallerPath $_this
+Refresh-RunnerPath -ExportToGitHubEnv:$ExportToGitHubEnv
+
+# Custom Git install (e.g. H:\Programs\Git) - add cmd to PATH for this job if needed
+if (-not (Get-Command git.exe -ErrorAction SilentlyContinue)) {
+    foreach ($gitCmdDir in @(
+        "H:\Programs\Git\cmd",
+        (Join-Path ${env:ProgramFiles} "Git\cmd"),
+        (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd")
+    )) {
+        if (Test-Path (Join-Path $gitCmdDir "git.exe")) {
+            $env:Path = "$gitCmdDir;$env:Path"
+            break
+        }
+    }
+    if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
+        Add-Content -Path $env:GITHUB_ENV -Value "PATH=$env:Path"
+    }
+}
 
 Write-Host "=== Windows runner setup ==="
 Write-Host "Repo: $script:WinutilsRepoRoot"
@@ -37,13 +55,14 @@ if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue) -or
     exit 1
 }
 
-$bashCandidates = @(
-    "${env:ProgramFiles}\Git\bin\bash.exe",
-    "${env:ProgramFiles(x86)}\Git\bin\bash.exe"
-)
-$bash = $bashCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+$bash = Find-GitBash
 if (-not $bash) {
-    throw "[toolchain] Git Bash not found. Install: winget install Git.Git"
+    Write-Host ""
+    Write-Host "[toolchain] Git Bash not found on runner PATH." -ForegroundColor Red
+    Write-Host "  Install: winget install Git.Git" -ForegroundColor Yellow
+    Write-Host "  Then restart the runner service (PATH is cached at service start):" -ForegroundColor Yellow
+    Write-Host "    Stop-Service actions.runner.* ; Start-Service actions.runner.*" -ForegroundColor Yellow
+    throw "[toolchain] Git Bash not found"
 }
 Write-Host "[toolchain] bash: $bash"
 

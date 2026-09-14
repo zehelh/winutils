@@ -1,6 +1,5 @@
 # Load Visual Studio 2022 MSVC environment (cl, link, msbuild).
 #Requires -Version 5.1
-# With -ExportToGitHubEnv, persists variables for subsequent GitHub Actions steps.
 param([switch]$ExportToGitHubEnv)
 
 $ErrorActionPreference = "Stop"
@@ -10,48 +9,50 @@ function Test-MsvcReady {
            (Get-Command cl.exe -ErrorAction SilentlyContinue)
 }
 
+function Write-MsvcInstallHelp {
+    $repoRoot = $null
+    if ($script:WinutilsRepoRoot) { $repoRoot = $script:WinutilsRepoRoot }
+    $installScript = if ($repoRoot) {
+        Join-Path $repoRoot "scripts\install-vs-cpp-workload.ps1"
+    } else {
+        ".\scripts\install-vs-cpp-workload.ps1"
+    }
+
+    Write-Host ""
+    Write-Host "[msvc] ERROR: C++ build tools not installed." -ForegroundColor Red
+    Write-Host "[msvc] winget installs Build Tools shell only - add the C++ workload once:" -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "  1. Open PowerShell as Administrator" -ForegroundColor White
+    Write-Host "  2. cd H:\winutils" -ForegroundColor White
+    Write-Host "  3. .\scripts\install-vs-cpp-workload.ps1" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  Or GUI: Visual Studio Installer -> Modify -> Desktop development with C++" -ForegroundColor DarkGray
+    Write-Host ""
+}
+
 if (Test-MsvcReady) {
     Write-Host "[msvc] Already in PATH: msbuild + cl"
     return
 }
 
-$vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+$vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
 if (-not (Test-Path $vswhere)) {
-    throw @"
-[msvc] vswhere not found.
-Install Visual Studio 2022 Build Tools with workload 'Desktop development with C++':
-  https://visualstudio.microsoft.com/downloads/#build-tools-for-visual-studio-2022
-"@
+    Write-MsvcInstallHelp
+    throw "[msvc] vswhere not found - install Visual Studio 2022 Build Tools first."
 }
 
 $vsPath = & $vswhere -latest -products * `
     -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-    -property installationPath
+    -property installationPath 2>$null
 
 if (-not $vsPath) {
-    $installer = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vs_installer.exe"
-    $existing = @(& $vswhere -all -products * -property installationPath 2>$null | Where-Object { $_ })
-    $hint = @"
-
-[msvc] Visual Studio C++ tools (MSVC v143) not found.
-winget only installed Build Tools shell - add the C++ workload:
-
-  Option A (winget, run as Admin):
-    winget install Microsoft.VisualStudio.2022.BuildTools --force --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
-
-  Option B (Visual Studio Installer):
-    Open 'Visual Studio Installer' -> Modify -> check 'Desktop development with C++' -> Install
-
-"@
-    if ($existing.Count -gt 0) {
-        $hint += "  Option C (modify existing install at $($existing[0])):`n"
-        $hint += "    & `"$installer`" modify --installPath `"$($existing[0])`" --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended --passive --norestart`n"
-    }
-    throw $hint.Trim()
+    Write-MsvcInstallHelp
+    exit 1
 }
 
 $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
 if (-not (Test-Path $vcvars)) {
+    Write-MsvcInstallHelp
     throw "[msvc] vcvars64.bat not found: $vcvars"
 }
 
@@ -64,7 +65,6 @@ foreach ($line in $envLines) {
     $value = $matches[2]
     Set-Item -Path "env:$name" -Value $value
     if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
-        # GITHUB_ENV delimiter syntax for values with special chars
         if ($value -match "[\r\n%]") {
             $delim = "MSVCENV_${name}_$(Get-Random)"
             Add-Content -Path $env:GITHUB_ENV -Value "${name}<<${delim}"
@@ -77,9 +77,8 @@ foreach ($line in $envLines) {
 }
 
 if (-not (Test-MsvcReady)) {
-    $msbuild = Get-Command msbuild.exe -ErrorAction SilentlyContinue
-    $cl = Get-Command cl.exe -ErrorAction SilentlyContinue
-    throw "[msvc] Failed to configure toolchain. msbuild=$msbuild cl=$cl"
+    Write-MsvcInstallHelp
+    throw "[msvc] vcvars64 loaded but msbuild/cl still missing."
 }
 
 Write-Host "[msvc] OK: $(msbuild -version | Select-Object -First 1)"

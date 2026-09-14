@@ -28,7 +28,13 @@ foreach ($dir in @("C:\hadoop-src", "C:\vcpkg")) {
 }
 
 & (Join-Path $script:WinutilsScriptDir "ensure-maven.ps1") -ExportToGitHubEnv:$ExportToGitHubEnv
+
 & (Join-Path $script:WinutilsScriptDir "setup-msvc-env.ps1") -ExportToGitHubEnv:$ExportToGitHubEnv
+if ($LASTEXITCODE -ne 0) {
+    Write-Host ""
+    Write-Host "Setup stopped: install C++ tools then re-run this script." -ForegroundColor Red
+    exit 1
+}
 
 $bashCandidates = @(
     "${env:ProgramFiles}\Git\bin\bash.exe",

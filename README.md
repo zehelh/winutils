@@ -102,12 +102,16 @@ The workflow targets a **self-hosted Windows runner** (`runs-on: [self-hosted, W
 
 ### Self-hosted Windows server (minimal install)
 
-Only **two** manual installs are required on the server; the workflow handles the rest:
+Manual setup on the server (once):
 
-| Install manually | Why |
-|------------------|-----|
-| **Visual Studio 2022 Build Tools** + *Desktop development with C++* | MSVC / MSBuild (cannot be automated reliably in CI) |
-| **Git for Windows** | checkout, clone Hadoop, Git Bash for Maven |
+| Step | Command |
+|------|---------|
+| 1. Build Tools shell | `winget install Microsoft.VisualStudio.2022.BuildTools` |
+| 2. **C++ workload** (Admin) | `.\scripts\install-vs-cpp-workload.ps1` |
+| 3. Git for Windows | `winget install Git.Git` |
+| 4. Verify toolchain | `.\scripts\setup-windows-runner.ps1 -SkipJavaCheck` |
+
+Step 2 is required: winget only installs the Build Tools installer, not MSVC. The script `install-vs-cpp-workload.ps1` adds *Desktop development with C++* silently (~10-30 min).
 
 Optional: `winget install GitHub.cli` (release duplicate check).
 

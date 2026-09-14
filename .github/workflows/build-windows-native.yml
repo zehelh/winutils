@@ -46,7 +46,15 @@ jobs:
           # SemVer: 17.0.20.1 is invalid (4 segments). 17.0.20 resolves Temurin 17.0.20.x
           java-version: "17.0.20"
           architecture: x64
-          cache: maven
+          # No cache:maven here — setup-java requires pom.xml in this repo (Hadoop is cloned later).
+
+      - name: Cache Maven repository
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-win-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
+          restore-keys: |
+            maven-win-
 
       - name: Verify toolchain
         run: |

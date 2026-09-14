@@ -1,5 +1,9 @@
-# Native Windows build (no Wine). Produces the same hadoop-<version>/ layout as ./build.sh.
-# Recommended if JNI fails with the Linux/Wine cross-compile artifacts.
+# Native Windows build (no Wine). Same hadoop-<version>/ layout as ./build.sh
+# Refs:
+#   - https://docs.github.com/en/actions/how-tos/writing-workflows/building-and-testing/building-and-testing-java-with-maven
+#   - https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#defaultsrunshell
+#   - https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-Readme.md
+# Note: there is NO official actions/setup-maven — Maven is preinstalled on windows-latest.
 name: Build Windows Native
 
 on:
@@ -19,10 +23,17 @@ on:
           - lite
           - full
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: windows-latest
     timeout-minutes: 180
+
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout
@@ -36,16 +47,12 @@ jobs:
           architecture: x64
           cache: maven
 
-      - name: Setup Maven
-        uses: actions/setup-maven@v4
-        with:
-          maven-version: "3.9.9"
-
-      - name: Verify JDK
-        shell: bash
+      - name: Verify toolchain
         run: |
           java -version
           echo "JAVA_HOME=$JAVA_HOME"
+          mvn -version
+          git --version
 
       - name: Cache vcpkg
         uses: actions/cache@v4
@@ -62,8 +69,8 @@ jobs:
           key: hadoop-releases-${{ inputs.hadoop_version }}
 
       - name: Build native + assemble
-        shell: bash
         env:
+          CI: true
           HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
           VCPKG_ROOT: ${{ github.workspace }}/.cache/vcpkg
           SHELL_EXECUTABLE: bash.exe

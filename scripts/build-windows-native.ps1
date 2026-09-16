@@ -126,6 +126,10 @@ function Invoke-MavenNative {
     $toolchain = Join-Path $VcpkgRoot "scripts\buildsystems\vcpkg.cmake"
     $bash = Find-BashExe
     $env:MAVEN_OPTS = if ($env:MAVEN_OPTS) { $env:MAVEN_OPTS } else { "-Xmx4096M -Xss128M" }
+    $platformToolset = if ($env:PLATFORM_TOOLSET) { $env:PLATFORM_TOOLSET } else {
+        & (Join-Path $ScriptDir "detect-msvc-toolset.ps1")
+    }
+    Write-Host "PlatformToolset: $platformToolset"
     $mavenCommon = @(
         "-Pnative-win",
         "-Dhttps.protocols=TLSv1.2",
@@ -139,7 +143,7 @@ function Invoke-MavenNative {
         "-Dwindows.cmake.build.type=RelWithDebInfo",
         "-Dwindows.build.hdfspp.dll=off",
         "-Dwindows.no.sasl=on",
-        "-Duse.platformToolsetVersion=v143"
+        "-Duse.platformToolsetVersion=$platformToolset"
     )
     Push-Location $HadoopSrc
     try {
@@ -203,7 +207,7 @@ Clone-Hadoop $GitRef
 $bash = $env:SHELL_EXECUTABLE
 if (-not $bash) { $bash = (Find-GitBash) }
 if ($bash) {
-    & $bash (Join-Path $ScriptDir "patch-hadoop-winutils-sdk.sh") $HadoopSrc
+    & (Join-Path $ScriptDir "patch-hadoop-winutils-sdk.ps1") -HadoopSrc $HadoopSrc
     & $bash (Join-Path $ScriptDir "patch-hadoop-hdfs-lite.sh") $HadoopSrc
 } else {
     Write-Warning "[patch] Git Bash not found - skipping Hadoop patch scripts"

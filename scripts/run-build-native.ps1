@@ -25,6 +25,12 @@ foreach ($name in $runnerPaths.Keys) {
 }
 Ensure-PythonPath
 
+$hadoopSrcWin = $runnerPaths.HADOOP_SRC
+& (Join-Path $scriptDir "patch-hadoop-winutils-sdk.ps1") -HadoopSrc $hadoopSrcWin
+$toolset = & (Join-Path $scriptDir "detect-msvc-toolset.ps1")
+$env:PLATFORM_TOOLSET = $toolset
+Write-Host "[build] PLATFORM_TOOLSET=$toolset"
+
 if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue)) {
     throw "[build] msbuild missing - Setup Windows toolchain step failed"
 }

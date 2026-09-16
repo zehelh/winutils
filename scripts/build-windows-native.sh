@@ -32,6 +32,21 @@ normalize_windows_path() {
   fi
 }
 
+win_path() {
+  if command -v cygpath &>/dev/null; then
+    cygpath -m "$1"
+  else
+    local p="$1"
+    if [[ "$p" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+      local drive
+      drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')"
+      printf '%s:/%s' "${drive}" "${BASH_REMATCH[2]}"
+    else
+      printf '%s' "$p"
+    fi
+  fi
+}
+
 if [[ "${OS:-}" == "Windows_NT" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
   VCPKG_ROOT="${VCPKG_ROOT:-/h/vcpkg}"
 else
@@ -157,33 +172,45 @@ require_msbuild() {
   exit 1
 }
 
-win_path() {
-  if command -v cygpath &>/dev/null; then
-    cygpath -m "$1"
-  else
-    local p="$1"
-    if [[ "$p" =~ ^/([a-zA-Z])/(.*)$ ]]; then
-      local drive
-      drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')"
-      printf '%s:/%s' "${drive}" "${BASH_REMATCH[2]}"
-    else
-      printf '%s' "$p"
-    fi
+detect_platform_toolset() {
+  local ts
+  if [[ -n "${PLATFORM_TOOLSET:-}" ]]; then
+    echo "${PLATFORM_TOOLSET}"
+    return 0
   fi
+  ts="$(powershell.exe -NoProfile -ExecutionPolicy Bypass \
+    -File "${REPO_ROOT}/scripts/detect-msvc-toolset.ps1" 2>/dev/null | tr -d '\r\n' || true)"
+  if [[ -z "${ts}" ]]; then
+    ts="v143"
+  fi
+  echo "${ts}"
+}
+
+log_winutils_msbuild_failure() {
+  local hadoop_src_win ts
+  hadoop_src_win="$(win_path "${HADOOP_SRC}")"
+  ts="$(detect_platform_toolset)"
+  echo "[win] Maven failed on winutils — MSBuild diagnostic (PlatformToolset=${ts}):" >&2
+  powershell.exe -NoProfile -ExecutionPolicy Bypass \
+    -File "${REPO_ROOT}/scripts/run-winutils-msbuild.ps1" \
+    -HadoopSrc "${hadoop_src_win}" \
+    -PlatformToolset "${ts}" \
+    -Verbosity detailed >&2 || true
 }
 
 run_maven_native() {
-  local vcpkg_prefix toolchain
+  local vcpkg_prefix toolchain platform_toolset
   vcpkg_prefix="$(win_path "${VCPKG_ROOT}/installed/x64-windows")"
   toolchain="$(win_path "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")"
+  platform_toolset="$(detect_platform_toolset)"
 
   require_msbuild
   export MAVEN_OPTS="${MAVEN_OPTS:--Xmx4096M -Xss128M}"
 
   cd "${HADOOP_SRC}"
 
-  echo "[win] Maven: hadoop-common (native-win)"
-  mvn --batch-mode clean package \
+  echo "[win] Maven: hadoop-common (native-win, PlatformToolset=${platform_toolset})"
+  if ! mvn --batch-mode clean package \
     -pl hadoop-common-project/hadoop-common \
     -am \
     -Pnative-win \
@@ -198,7 +225,10 @@ run_maven_native() {
     -Dwindows.cmake.build.type=RelWithDebInfo \
     -Dwindows.build.hdfspp.dll=off \
     -Dwindows.no.sasl=on \
-    -Duse.platformToolsetVersion=v143
+    -Duse.platformToolsetVersion="${platform_toolset}"; then
+    log_winutils_msbuild_failure
+    exit 1
+  fi
 
   echo "[win] hdfs.dll via CMake/Ninja"
   bash "${REPO_ROOT}/scripts/build-hdfs-dll-native.sh"
@@ -254,7 +284,13 @@ echo "[win] JAVA_HOME=${JAVA_HOME}"
 java -version
 
 clone_hadoop
-bash "${REPO_ROOT}/scripts/patch-hadoop-winutils-sdk.sh" "${HADOOP_SRC}"
+if command -v powershell.exe &>/dev/null; then
+  powershell.exe -NoProfile -ExecutionPolicy Bypass \
+    -File "${REPO_ROOT}/scripts/patch-hadoop-winutils-sdk.ps1" \
+    -HadoopSrc "$(win_path "${HADOOP_SRC}")"
+else
+  bash "${REPO_ROOT}/scripts/patch-hadoop-winutils-sdk.sh" "${HADOOP_SRC}"
+fi
 bash "${REPO_ROOT}/scripts/patch-hadoop-hdfs-lite.sh" "${HADOOP_SRC}"
 setup_vcpkg
 run_maven_native

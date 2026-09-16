@@ -11,7 +11,18 @@ $scriptDir = Split-Path -Path $MyInvocation.MyCommand.Path -Parent
 Initialize-WinutilsPaths -CallerPath $MyInvocation.MyCommand.Path
 
 # Reload MSVC into this process (GITHUB_ENV PATH may not propagate fully into Git Bash).
+# vcvars64 overwrites VCPKG_ROOT with VS bundled vcpkg — preserve runner paths first.
+$runnerPaths = @{
+    VCPKG_ROOT = if ($env:VCPKG_ROOT) { $env:VCPKG_ROOT } else { "H:\vcpkg" }
+    HADOOP_SRC = if ($env:HADOOP_SRC) { $env:HADOOP_SRC } else { "H:\hadoop-src" }
+    MAVEN_ARGS = $env:MAVEN_ARGS
+}
 & (Join-Path $scriptDir "setup-msvc-env.ps1")
+foreach ($name in $runnerPaths.Keys) {
+    if ($runnerPaths[$name]) {
+        Set-Item -Path "env:$name" -Value $runnerPaths[$name]
+    }
+}
 Ensure-PythonPath
 
 if (-not (Get-Command msbuild.exe -ErrorAction SilentlyContinue)) {
@@ -40,6 +51,8 @@ if ($PackageMode) {
 }
 
 Write-Host "[build] bash: $bash"
+Write-Host "[build] VCPKG_ROOT=$env:VCPKG_ROOT"
+Write-Host "[build] HADOOP_SRC=$env:HADOOP_SRC"
 Write-Host "[build] msbuild: $(cmd /c 'msbuild.exe -version 2>&1 & exit /b 0' | Select-Object -First 1)"
 
 $repo = if ($env:GITHUB_WORKSPACE) { $env:GITHUB_WORKSPACE } else { Split-Path $scriptDir -Parent }

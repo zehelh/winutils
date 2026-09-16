@@ -70,11 +70,19 @@ if (-not (Test-Path $vcvars)) {
 
 Write-Host "[msvc] Loading $vcvars"
 
+# vcvars64 sets VCPKG_ROOT to VS bundled vcpkg — we use H:\vcpkg (or caller override).
+$preserveEnv = @{
+    VCPKG_ROOT = $env:VCPKG_ROOT
+    HADOOP_SRC = $env:HADOOP_SRC
+    MAVEN_ARGS = $env:MAVEN_ARGS
+}
+
 $envLines = cmd /c "`"$vcvars`" >nul 2>&1 && set"
 foreach ($line in $envLines) {
     if ($line -notmatch "^([^=]+)=(.*)$") { continue }
     $name = $matches[1]
     $value = $matches[2]
+    if ($name -eq "VCPKG_ROOT") { continue }
     Set-Item -Path "env:$name" -Value $value
     if ($ExportToGitHubEnv -and $env:GITHUB_ENV) {
         if ($value -match "[\r\n%]") {
@@ -85,6 +93,12 @@ foreach ($line in $envLines) {
         } else {
             Add-Content -Path $env:GITHUB_ENV -Value "${name}=$value"
         }
+    }
+}
+
+foreach ($name in $preserveEnv.Keys) {
+    if ($preserveEnv[$name]) {
+        Set-Item -Path "env:$name" -Value $preserveEnv[$name]
     }
 }
 

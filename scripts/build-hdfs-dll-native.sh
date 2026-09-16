@@ -10,6 +10,9 @@ BUILD_DIR="${HDFS_MODULE}/target/hdfs-native-build"
 OUT_BIN="${HDFS_MODULE}/target/bin"
 JAVAH_DIR="${BUILD_DIR}/javah"
 VCPKG_ROOT="${VCPKG_ROOT:-/h/vcpkg}"
+if [[ "${VCPKG_ROOT}" == *"/VC/vcpkg"* || "${VCPKG_ROOT}" == *"Visual Studio"* ]]; then
+  VCPKG_ROOT="/h/vcpkg"
+fi
 
 win_path() {
   if command -v cygpath &>/dev/null; then

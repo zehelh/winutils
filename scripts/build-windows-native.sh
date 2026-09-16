@@ -19,7 +19,30 @@ else
 fi
 HADOOP_HOME="${REPO_ROOT}/hadoop-${HADOOP_VERSION}"
 REF_FILE="${REPO_ROOT}/.hadoop-src-ref"
-VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
+
+normalize_windows_path() {
+  local p="$1"
+  if [[ "$p" =~ ^([A-Za-z]):[/\\](.*)$ ]]; then
+    local drive rest
+    drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:upper:]' '[:lower:]')"
+    rest="${BASH_REMATCH[2]//\\//}"
+    printf '/%s/%s' "${drive}" "${rest}"
+  else
+    printf '%s' "$p"
+  fi
+}
+
+if [[ "${OS:-}" == "Windows_NT" || "${GITHUB_ACTIONS:-}" == "true" ]]; then
+  VCPKG_ROOT="${VCPKG_ROOT:-/h/vcpkg}"
+else
+  VCPKG_ROOT="${VCPKG_ROOT:-${REPO_ROOT}/.cache/vcpkg}"
+fi
+HADOOP_SRC="$(normalize_windows_path "${HADOOP_SRC}")"
+VCPKG_ROOT="$(normalize_windows_path "${VCPKG_ROOT}")"
+# Reject Visual Studio bundled vcpkg (vcvars64 sets this; breaks git clone target).
+if [[ "${VCPKG_ROOT}" == *"/VC/vcpkg"* || "${VCPKG_ROOT}" == *"Visual Studio"* ]]; then
+  VCPKG_ROOT="/h/vcpkg"
+fi
 # Recent vcpkg tag (VS 2022). See https://github.com/microsoft/vcpkg/releases
 # MSYS2 packages expire on mirrors; use a recent vcpkg tag (see https://github.com/microsoft/vcpkg/releases).
 VCPKG_COMMIT="${VCPKG_COMMIT:-2026.06.24}"
@@ -211,6 +234,7 @@ PACKAGE_MODE="${WINUTILS_PACKAGE_MODE:-${PACKAGE_MODE:-native}}"
 
 echo "[win] Native Windows build Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF} mode=${PACKAGE_MODE}"
 echo "[win] HADOOP_SRC=${HADOOP_SRC}"
+echo "[win] VCPKG_ROOT=${VCPKG_ROOT}"
 echo "[win] JAVA_HOME=${JAVA_HOME}"
 java -version
 

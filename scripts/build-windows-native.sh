@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Native Windows build (self-hosted runner or local Git Bash + MSVC).
-# Output: official Apache release tarball + native overlay (lite or full).
+# Output layout depends on PACKAGE_MODE (native|tarball|full).
 set -euo pipefail
 
 # Git for Windows: preserve Windows PATH (MSBuild, cl.exe) inside bash.
@@ -166,12 +166,36 @@ run_maven_native() {
   bash "${REPO_ROOT}/scripts/build-hdfs-dll-native.sh"
 }
 
+assemble_output() {
+  case "${PACKAGE_MODE}" in
+    native)
+      bash "${REPO_ROOT}/scripts/assemble-native-only.sh" \
+        "${HADOOP_VERSION}" "${HADOOP_HOME}" "${COMMON_BIN}" "${HDFS_BIN}"
+      ;;
+    tarball)
+      export HADOOP_DIST_PROFILE=lite
+      bash "${REPO_ROOT}/scripts/assemble-from-release.sh" \
+        "${HADOOP_VERSION}" "${HADOOP_HOME}" "${COMMON_BIN}" "${HDFS_BIN}" "${CACHE_DIR}"
+      ;;
+    full)
+      export HADOOP_DIST_PROFILE=full
+      bash "${REPO_ROOT}/scripts/assemble-from-release.sh" \
+        "${HADOOP_VERSION}" "${HADOOP_HOME}" "${COMMON_BIN}" "${HDFS_BIN}" "${CACHE_DIR}"
+      ;;
+    *)
+      echo "[win] Error: unknown PACKAGE_MODE=${PACKAGE_MODE} (native|tarball|full)" >&2
+      exit 1
+      ;;
+  esac
+}
+
 write_build_meta() {
   local jdk_ver
   jdk_ver="$(java -version 2>&1 | head -1)"
   cat > "${HADOOP_HOME}/.winutils-build-meta" <<EOF
 hadoop_version=${HADOOP_VERSION}
 hadoop_git_ref=${HADOOP_GIT_REF}
+package_mode=${PACKAGE_MODE}
 build_method=windows-native
 jdk_runtime=${jdk_ver}
 runtime_note=Use the same Temurin JDK as this build (see Actions log / java -version)
@@ -183,7 +207,9 @@ EOF
   exit 1
 }
 
-echo "[win] Native Windows build Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF}"
+PACKAGE_MODE="${WINUTILS_PACKAGE_MODE:-${PACKAGE_MODE:-native}}"
+
+echo "[win] Native Windows build Hadoop ${HADOOP_VERSION} ref=${HADOOP_GIT_REF} mode=${PACKAGE_MODE}"
 echo "[win] HADOOP_SRC=${HADOOP_SRC}"
 echo "[win] JAVA_HOME=${JAVA_HOME}"
 java -version
@@ -206,13 +232,6 @@ HDFS_BIN="${HADOOP_SRC}/hadoop-hdfs-project/hadoop-hdfs-native-client/target/bin
   exit 1
 }
 
-export HADOOP_DIST_PROFILE="${HADOOP_DIST_PROFILE:-lite}"
-bash "${REPO_ROOT}/scripts/assemble-from-release.sh" \
-  "${HADOOP_VERSION}" \
-  "${HADOOP_HOME}" \
-  "${COMMON_BIN}" \
-  "${HDFS_BIN}" \
-  "${CACHE_DIR}"
-
+assemble_output
 write_build_meta
 echo "[win] Done: ${HADOOP_HOME}/"

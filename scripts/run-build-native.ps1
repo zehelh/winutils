@@ -1,7 +1,8 @@
 # Run native build via Git Bash (avoids WSL bash on LocalSystem runners).
 #Requires -Version 5.1
 param(
-    [Parameter(Mandatory = $true)][string]$HadoopVersion
+    [Parameter(Mandatory = $true)][string]$HadoopVersion,
+    [ValidateSet("native", "tarball", "full")][string]$PackageMode = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -30,6 +31,13 @@ if (-not $bash) {
 # Git Bash: keep Windows PATH entries (MSBuild, cl.exe live there).
 $env:MSYS2_PATH_TYPE = "inherit"
 $env:SHELL_EXECUTABLE = $bash
+if ($PackageMode) {
+    $env:WINUTILS_PACKAGE_MODE = $PackageMode
+} elseif ($env:WINUTILS_PACKAGE_MODE) {
+    # keep GITHUB_ENV value from workflow
+} else {
+    $env:WINUTILS_PACKAGE_MODE = "native"
+}
 
 Write-Host "[build] bash: $bash"
 Write-Host "[build] msbuild: $(cmd /c 'msbuild.exe -version 2>&1 & exit /b 0' | Select-Object -First 1)"

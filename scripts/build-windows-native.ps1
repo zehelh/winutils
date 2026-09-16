@@ -3,7 +3,7 @@
 #
 # Usage:
 #   .\scripts\build-windows-native.ps1
-#   .\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -DistProfile lite
+#   .\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -PackageMode native
 #   .\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -CreateZip
 #
 # Prerequisites: Git, Temurin JDK 17 x64, Maven 3.9+, Visual Studio 2022 (C++ desktop), CMake (optional, via VS)
@@ -11,7 +11,7 @@
 [CmdletBinding()]
 param(
     [string]$HadoopVersion = "3.4.1",
-    [ValidateSet("lite", "full")][string]$DistProfile = "lite",
+    [ValidateSet("native", "tarball", "full")][string]$PackageMode = "native",
     [string]$HadoopSrc = "C:\hadoop-src",
     [string]$VcpkgRoot = "",
     [string]$JavaHome = "",
@@ -164,6 +164,7 @@ function Write-BuildMeta {
     @"
 hadoop_version=$HadoopVersion
 hadoop_git_ref=$GitRef
+package_mode=$PackageMode
 build_method=windows-native-powershell
 hadoop_src=$HadoopSrc
 jdk_runtime=$javaVer
@@ -176,7 +177,7 @@ Write-Step "winutils native build $HadoopVersion"
 Write-Host "Repo:       $RepoRoot"
 Write-Host "HADOOP_SRC: $HadoopSrc"
 Write-Host "Output:     $HadoopHome"
-Write-Host "Profile:    $DistProfile"
+Write-Host "Package:    $PackageMode"
 
 Import-VsDevEnvironment
 & (Join-Path $ScriptDir "ensure-maven.ps1")
@@ -226,14 +227,34 @@ foreach ($pair in @(
 }
 
 if (-not $SkipAssemble) {
-    Write-Step "Assemble HADOOP_HOME"
-    & (Join-Path $ScriptDir "assemble-from-release.ps1") `
-        -HadoopVersion $HadoopVersion `
-        -HadoopHome $HadoopHome `
-        -CommonBin $CommonBin `
-        -HdfsBin $HdfsBin `
-        -CacheDir $CacheDir `
-        -DistProfile $DistProfile
+    Write-Step "Assemble output ($PackageMode)"
+    switch ($PackageMode) {
+        "native" {
+            & (Join-Path $ScriptDir "assemble-native-only.ps1") `
+                -HadoopVersion $HadoopVersion `
+                -HadoopHome $HadoopHome `
+                -CommonBin $CommonBin `
+                -HdfsBin $HdfsBin
+        }
+        "tarball" {
+            & (Join-Path $ScriptDir "assemble-from-release.ps1") `
+                -HadoopVersion $HadoopVersion `
+                -HadoopHome $HadoopHome `
+                -CommonBin $CommonBin `
+                -HdfsBin $HdfsBin `
+                -CacheDir $CacheDir `
+                -DistProfile lite
+        }
+        "full" {
+            & (Join-Path $ScriptDir "assemble-from-release.ps1") `
+                -HadoopVersion $HadoopVersion `
+                -HadoopHome $HadoopHome `
+                -CommonBin $CommonBin `
+                -HdfsBin $HdfsBin `
+                -CacheDir $CacheDir `
+                -DistProfile full
+        }
+    }
 }
 
 Write-BuildMeta

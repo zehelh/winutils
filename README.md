@@ -4,17 +4,33 @@ Windows binaries for Apache Hadoop: `winutils.exe`, `hadoop.dll`, `hdfs.dll`, an
 
 Output layout follows [cdarlint/winutils](https://github.com/cdarlint/winutils) and [steveloughran/winutils](https://github.com/steveloughran/winutils).
 
-**Native Windows build** (MSVC + Maven `-Pnative-win`): DLLs are compiled on Windows, then overlaid onto the official Apache release tarball.
+**Native Windows build** (MSVC + Maven `-Pnative-win`): DLLs are compiled on Windows, then packaged according to **package mode**.
+
+## Package modes
+
+| Mode      | Output | Use case |
+| --------- | ------ | -------- |
+| `native`  | `bin/` only (`winutils.exe`, `hadoop.dll`, `hdfs.dll`) | Default — scheduled builds, drop-in native libs |
+| `tarball` | Lite `HADOOP_HOME` (~270 MB): Apache release + native overlay, trimmed for PySpark | Full layout without docs/tools/Linux libs |
+| `full`    | Complete Apache release + native overlay | Entire official distribution |
+
+Scheduled builds (`Check Hadoop Releases`) use **`native`** only (no Apache tarball download).
+
+Manual builds can choose the mode in the **Build Windows Native** workflow. Release tags are suffixed so variants do not overwrite each other:
+
+| Mode     | GitHub Release tag        |
+| -------- | ------------------------- |
+| `native` | `hadoop-<version>`        |
+| `tarball`| `hadoop-<version>-tarball`|
+| `full`   | `hadoop-<version>-full`   |
 
 ## `hadoop-<version>/` contents
 
 | Item                   | Description                                                                 |
 | ---------------------- | --------------------------------------------------------------------------- |
-| `bin/`                 | `.cmd` scripts + native binaries (`winutils.exe`, `hadoop.dll`, `hdfs.dll`) |
-| `share/`, `etc/`       | JARs and config from the Apache release                                     |
-| `.winutils-build-meta` | JDK / git ref used for the build                                            |
-
-**lite** profile (~270 MB): PySpark-friendly trim (no docs, tools, Linux libs). **full** profile: complete Apache release + native overlay.
+| `bin/`                 | Native binaries (+ `.cmd` scripts when using `tarball` or `full`)           |
+| `share/`, `etc/`       | JARs and config (`tarball` / `full` only)                                 |
+| `.winutils-build-meta` | JDK / git ref / package mode used for the build                             |
 
 ## Build requirements
 
@@ -35,13 +51,13 @@ From **PowerShell** (the script loads `vcvars64` if needed):
 ```powershell
 cd C:\path\to\winutils
 $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.20.1-hotspot"
-.\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -DistProfile lite -CreateZip
+.\scripts\build-windows-native.ps1 -HadoopVersion 3.4.1 -PackageMode native -CreateZip
 ```
 
 | Parameter        | Default         | Description                         |
 | ---------------- | --------------- | ----------------------------------- |
 | `-HadoopVersion` | `3.4.1`         | Hadoop version                      |
-| `-DistProfile`   | `lite`          | `lite` or `full`                    |
+| `-PackageMode`   | `native`        | `native`, `tarball`, or `full`      |
 | `-HadoopSrc`     | `C:\hadoop-src` | Source clone path (avoids MAX_PATH) |
 | `-CreateZip`     | off             | Also writes `hadoop-<version>.zip`  |
 | `-SkipVcpkg`     | off             | Reuse existing vcpkg install        |
@@ -52,6 +68,8 @@ Git Bash alternative (after MSVC setup):
 ```bash
 export JAVA_HOME="/c/Program Files/Eclipse Adoptium/jdk-17.0.20.1-hotspot"
 bash scripts/build-windows-native.sh 3.4.1
+# tarball or full:
+WINUTILS_PACKAGE_MODE=tarball bash scripts/build-windows-native.sh 3.4.1
 ```
 
 **First run**: vcpkg (~30–60 min) + Maven native (~60 min). Later runs reuse caches.
@@ -74,9 +92,10 @@ Register the runner with labels `self-hosted`, `Windows`, `X64`.
 **Build Windows Native** workflow (`build-windows-native.yml`):
 
 1. Actions → **Build Windows Native** → Run workflow
-2. Download the artifact or the **GitHub Release** (`hadoop-<version>.zip`)
+2. Choose **package mode** (`native`, `tarball`, or `full`)
+3. Download the artifact or the **GitHub Release** (tag depends on mode, see table above)
 
-**Check Hadoop Releases** (daily cron): detects new Apache versions and triggers builds for missing release tags.
+**Check Hadoop Releases** (daily cron): detects new Apache versions and triggers **`native`** builds for missing `hadoop-<version>` release tags.
 
 ## Hadoop versions
 
@@ -133,6 +152,7 @@ scripts/
   build-windows-native.ps1    # Local build entry (PowerShell)
   build-windows-native.sh     # Build entry (Git Bash / GHA)
   setup-windows-runner.ps1    # Self-hosted runner toolchain
+  assemble-native-only.sh     # bin/ only (no tarball)
   assemble-from-release.sh    # Apache tarball + native overlay
 versions.conf
 .github/workflows/

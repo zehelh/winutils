@@ -17,15 +17,6 @@ on:
         required: true
         default: "1"
         type: string
-      dist_profile:
-        description: Distribution profile passed to build workflow
-        required: true
-        default: lite
-        type: choice
-        options:
-          - lite
-          - full
-
 permissions:
   contents: write
   actions: write
@@ -62,6 +53,6 @@ jobs:
     uses: ./.github/workflows/build-windows-native.yml
     with:
       hadoop_version: ${{ matrix.version }}
-      dist_profile: ${{ inputs.dist_profile || 'lite' }}
+      package_mode: native
       create_release: true
     secrets: inherit

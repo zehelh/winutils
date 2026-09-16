@@ -1,4 +1,4 @@
-# Native Windows build. Output: hadoop-<version>/ (HADOOP_HOME layout).
+# Native Windows build. Output: hadoop-<version>/ (layout depends on package_mode).
 # Callable manually, from check-hadoop-releases.yml, or via workflow_dispatch.
 name: Build Windows Native
 
@@ -10,13 +10,14 @@ on:
         required: true
         default: "3.4.1"
         type: string
-      dist_profile:
-        description: Distribution profile
+      package_mode:
+        description: "native = DLLs only; tarball = lite HADOOP_HOME; full = complete Apache release"
         required: true
-        default: lite
+        default: native
         type: choice
         options:
-          - lite
+          - native
+          - tarball
           - full
       create_release:
         description: Publish GitHub Release with zip asset
@@ -29,10 +30,10 @@ on:
       hadoop_version:
         required: true
         type: string
-      dist_profile:
+      package_mode:
         required: false
         type: string
-        default: lite
+        default: native
       create_release:
         required: false
         type: boolean
@@ -43,14 +44,12 @@ permissions:
 
 jobs:
   build:
-    # Self-hosted Windows server (labels from runner registration).
-    # Change to windows-latest to use GitHub-hosted runners instead.
     runs-on: [self-hosted, Windows, X64]
     timeout-minutes: 360
 
     env:
       HADOOP_VERSION: ${{ inputs.hadoop_version }}
-      DIST_PROFILE: ${{ inputs.dist_profile }}
+      PACKAGE_MODE: ${{ inputs.package_mode || 'native' }}
       CREATE_RELEASE: ${{ inputs.create_release }}
 
     steps:
@@ -86,6 +85,7 @@ jobs:
             vcpkg-win-
 
       - name: Cache Hadoop release tarballs
+        if: inputs.package_mode == 'tarball' || inputs.package_mode == 'full'
         uses: actions/cache@v4
         with:
           path: .cache/hadoop-releases
@@ -97,7 +97,7 @@ jobs:
           CI: true
           GITHUB_ACTIONS: true
           HADOOP_SRC: C:/hadoop-src
-          HADOOP_DIST_PROFILE: ${{ inputs.dist_profile }}
+          WINUTILS_PACKAGE_MODE: ${{ inputs.package_mode || 'native' }}
           VCPKG_ROOT: C:/vcpkg
           VCPKG_COMMIT: "2026.06.24"
         run: |
@@ -107,15 +107,17 @@ jobs:
         shell: powershell
         run: |
           $ver = "${{ inputs.hadoop_version }}"
+          $mode = "${{ inputs.package_mode || 'native' }}"
           $zip = "hadoop-$ver.zip"
           if (Test-Path $zip) { Remove-Item $zip -Force }
           Compress-Archive -Path "hadoop-$ver" -DestinationPath $zip -CompressionLevel Optimal
           Get-Item $zip | Format-List Name, Length
+          "artifact_suffix=$mode" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: hadoop-${{ inputs.hadoop_version }}-windows-native
+          name: hadoop-${{ inputs.hadoop_version }}-${{ inputs.package_mode || 'native' }}-windows
           path: |
             hadoop-${{ inputs.hadoop_version }}/
             hadoop-${{ inputs.hadoop_version }}.zip
@@ -128,7 +130,11 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = "hadoop-${{ inputs.hadoop_version }}"
+          $ver = "${{ inputs.hadoop_version }}"
+          $mode = "${{ inputs.package_mode || 'native' }}"
+          $suffix = if ($mode -eq 'native') { '' } else { "-$mode" }
+          $tag = "hadoop-$ver$suffix"
+          "release_tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
           $exists = $false
           if (Get-Command gh -ErrorAction SilentlyContinue) {
             gh release view $tag 2>$null | Out-Null
@@ -145,17 +151,18 @@ jobs:
         if: inputs.create_release && steps.release_check.outputs.exists != 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: hadoop-${{ inputs.hadoop_version }}
-          name: Hadoop ${{ inputs.hadoop_version }} — Windows native (winutils)
+          tag_name: ${{ steps.release_check.outputs.release_tag }}
+          name: Hadoop ${{ inputs.hadoop_version }} — Windows native (${{ inputs.package_mode || 'native' }})
           body: |
-            Windows `HADOOP_HOME` for [Apache Hadoop ${{ inputs.hadoop_version }}](https://hadoop.apache.org/).
+            Windows build for [Apache Hadoop ${{ inputs.hadoop_version }}](https://hadoop.apache.org/).
 
-            **Contents** (same layout as [cdarlint/winutils](https://github.com/cdarlint/winutils)):
-            - `hadoop-${{ inputs.hadoop_version }}/` — lite/full distribution (`${{ inputs.dist_profile }}`)
-            - Native: `winutils.exe`, `hadoop.dll`, `hdfs.dll`
-            - JDK build: Temurin 17.0.20.x (use same major at runtime)
+            **Package mode:** `${{ inputs.package_mode || 'native' }}`
+            - `native` — `winutils.exe`, `hadoop.dll`, `hdfs.dll` only (`bin/`)
+            - `tarball` — lite `HADOOP_HOME` (Apache release + native overlay, trimmed)
+            - `full` — complete Apache release + native overlay
 
-            Extract the zip and set `HADOOP_HOME` to the `hadoop-${{ inputs.hadoop_version }}` folder.
+            JDK build: Temurin 17.0.20.x (use same major at runtime).
+
+            Extract the zip. For `native`, copy `bin/` into your existing `HADOOP_HOME` or set `HADOOP_HOME` to the extracted folder if you only need native libs.
           files: hadoop-${{ inputs.hadoop_version }}.zip
           fail_on_unmatched_files: true
-

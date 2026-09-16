@@ -40,7 +40,7 @@ Manual builds can choose the mode in the **Build Windows Native** workflow. Rele
 | VS 2022 Build Tools | **Desktop development with C++** workload (MSVC v143) |
 | Git for Windows     | Bash for Maven helper scripts                         |
 | Temurin JDK 17 x64  | Same major at runtime (e.g. 17.0.20)                  |
-| ~30 GB disk         | `C:\hadoop-src`, `C:\vcpkg`, Maven cache              |
+| ~30 GB disk         | `H:\hadoop-src`, `H:\vcpkg`, `H:\m2\repository`       |
 
 Maven and vcpkg are installed automatically by the scripts when missing.
 
@@ -58,7 +58,7 @@ $env:JAVA_HOME = "C:\Program Files\Eclipse Adoptium\jdk-17.0.20.1-hotspot"
 | ---------------- | --------------- | ----------------------------------- |
 | `-HadoopVersion` | `3.4.1`         | Hadoop version                      |
 | `-PackageMode`   | `native`        | `native`, `tarball`, or `full`      |
-| `-HadoopSrc`     | `C:\hadoop-src` | Source clone path (avoids MAX_PATH) |
+| `-HadoopSrc`     | `H:\hadoop-src` | Source clone path (avoids MAX_PATH) |
 | `-CreateZip`     | off             | Also writes `hadoop-<version>.zip`  |
 | `-SkipVcpkg`     | off             | Reuse existing vcpkg install        |
 | `-SkipMaven`     | off             | Assemble only (DLLs already built)  |
@@ -140,8 +140,9 @@ Classpath via `%HADOOP_HOME%\bin\hadoop.cmd classpath --glob`.
 
 | Path                      | Contents                       |
 | ------------------------- | ------------------------------ |
-| `C:\hadoop-src`           | Cloned Apache sources          |
-| `C:\vcpkg`                | vcpkg + `x64-windows` packages |
+| `H:\hadoop-src`           | Cloned Apache sources          |
+| `H:\vcpkg`                | vcpkg + `x64-windows` packages |
+| `H:\m2\repository`        | Maven cache (GHA / runner)       |
 | `.cache/hadoop-releases/` | Cached Apache tarballs         |
 | `~/.m2/repository`        | Maven cache                    |
 

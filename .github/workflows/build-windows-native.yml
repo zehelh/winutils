@@ -51,6 +51,9 @@ jobs:
       HADOOP_VERSION: ${{ inputs.hadoop_version }}
       PACKAGE_MODE: ${{ inputs.package_mode || 'native' }}
       CREATE_RELEASE: ${{ inputs.create_release }}
+      HADOOP_SRC: H:/hadoop-src
+      VCPKG_ROOT: H:/vcpkg
+      MAVEN_ARGS: -Dmaven.repo.local=H:/m2/repository
 
     steps:
       - name: Checkout
@@ -71,18 +74,18 @@ jobs:
       - name: Cache Maven repository
         uses: actions/cache@v4
         with:
-          path: ~/.m2/repository
-          key: maven-win-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
+          path: H:/m2/repository
+          key: maven-win-h-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
           restore-keys: |
-            maven-win-
+            maven-win-h-
 
       - name: Cache vcpkg
         uses: actions/cache@v4
         with:
-          path: C:/vcpkg
-          key: vcpkg-win-2026.06.24-${{ hashFiles('scripts/build-windows-native.sh', 'scripts/build-hdfs-dll-native.sh') }}
+          path: H:/vcpkg
+          key: vcpkg-win-h-2026.06.24-${{ hashFiles('scripts/build-windows-native.sh', 'scripts/build-hdfs-dll-native.sh') }}
           restore-keys: |
-            vcpkg-win-
+            vcpkg-win-h-
 
       - name: Cache Hadoop release tarballs
         if: inputs.package_mode == 'tarball' || inputs.package_mode == 'full'
@@ -96,9 +99,7 @@ jobs:
         env:
           CI: true
           GITHUB_ACTIONS: true
-          HADOOP_SRC: C:/hadoop-src
           WINUTILS_PACKAGE_MODE: ${{ inputs.package_mode || 'native' }}
-          VCPKG_ROOT: C:/vcpkg
           VCPKG_COMMIT: "2026.06.24"
         run: |
           & "${{ github.workspace }}/scripts/run-build-native.ps1" -HadoopVersion "${{ inputs.hadoop_version }}"

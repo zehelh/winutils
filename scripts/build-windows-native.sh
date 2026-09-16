@@ -11,9 +11,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 VERSIONS_FILE="${REPO_ROOT}/versions.conf"
 # Short path on Windows (Hadoop BUILDING.txt — avoid MAX_PATH).
 if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
-  HADOOP_SRC="${HADOOP_SRC:-/c/hadoop-src}"
+  HADOOP_SRC="${HADOOP_SRC:-/h/hadoop-src}"
 elif [[ "${OS:-}" == "Windows_NT" ]]; then
-  HADOOP_SRC="${HADOOP_SRC:-/c/hadoop-src}"
+  HADOOP_SRC="${HADOOP_SRC:-/h/hadoop-src}"
 else
   HADOOP_SRC="${HADOOP_SRC:-${REPO_ROOT}/hadoop-src}"
 fi
@@ -63,7 +63,7 @@ clone_hadoop() {
     mkdir -p "$(dirname "${HADOOP_SRC}")"
     if ! git -c core.longpaths=true clone --depth 1 --branch "${HADOOP_GIT_REF}" \
       https://github.com/apache/hadoop.git "${HADOOP_SRC}"; then
-      echo "[win] Error: git clone/checkout failed (Windows MAX_PATH? use /c/hadoop-src + core.longpaths)" >&2
+      echo "[win] Error: git clone/checkout failed (Windows MAX_PATH? use /h/hadoop-src + core.longpaths)" >&2
       exit 1
     fi
     echo "${HADOOP_GIT_REF}" > "${REF_FILE}"

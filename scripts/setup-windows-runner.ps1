@@ -41,7 +41,7 @@ try {
     Write-Warning "[paths] LongPathsEnabled needs Administrator (continuing if already set)"
 }
 
-foreach ($dir in @("C:\hadoop-src", "C:\vcpkg")) {
+foreach ($dir in @("H:\hadoop-src", "H:\vcpkg", "H:\m2\repository")) {
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
 }
 

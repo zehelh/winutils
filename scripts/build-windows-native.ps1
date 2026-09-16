@@ -12,7 +12,7 @@
 param(
     [string]$HadoopVersion = "3.4.1",
     [ValidateSet("native", "tarball", "full")][string]$PackageMode = "native",
-    [string]$HadoopSrc = "C:\hadoop-src",
+    [string]$HadoopSrc = "H:\hadoop-src",
     [string]$VcpkgRoot = "",
     [string]$JavaHome = "",
     [switch]$CreateZip,
@@ -86,7 +86,7 @@ function Clone-Hadoop([string]$GitRef) {
     New-Item -ItemType Directory -Force -Path (Split-Path $HadoopSrc -Parent) | Out-Null
     git -c core.longpaths=true clone --depth 1 --branch $GitRef `
         https://github.com/apache/hadoop.git $HadoopSrc
-    if ($LASTEXITCODE -ne 0) { throw "git clone failed (try C:\hadoop-src + long paths)" }
+    if ($LASTEXITCODE -ne 0) { throw "git clone failed (try H:\hadoop-src + long paths)" }
     Set-Content -Path $RefFile -Value $GitRef -NoNewline
     git -C $HadoopSrc config core.longpaths true
     $srcVer = Get-PomVersion $pom

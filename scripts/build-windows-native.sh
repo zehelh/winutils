@@ -157,10 +157,25 @@ require_msbuild() {
   exit 1
 }
 
+win_path() {
+  if command -v cygpath &>/dev/null; then
+    cygpath -m "$1"
+  else
+    local p="$1"
+    if [[ "$p" =~ ^/([a-zA-Z])/(.*)$ ]]; then
+      local drive
+      drive="$(printf '%s' "${BASH_REMATCH[1]}" | tr '[:lower:]' '[:upper:]')"
+      printf '%s:/%s' "${drive}" "${BASH_REMATCH[2]}"
+    else
+      printf '%s' "$p"
+    fi
+  fi
+}
+
 run_maven_native() {
   local vcpkg_prefix toolchain
-  vcpkg_prefix="${VCPKG_ROOT}/installed/x64-windows"
-  toolchain="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
+  vcpkg_prefix="$(win_path "${VCPKG_ROOT}/installed/x64-windows")"
+  toolchain="$(win_path "${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake")"
 
   require_msbuild
   export MAVEN_OPTS="${MAVEN_OPTS:--Xmx4096M -Xss128M}"

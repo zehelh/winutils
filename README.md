@@ -14,7 +14,7 @@ Output layout follows [cdarlint/winutils](https://github.com/cdarlint/winutils) 
 | `tarball` | Lite `HADOOP_HOME` (~270 MB): Apache release + native overlay, trimmed for PySpark | Full layout without docs/tools/Linux libs |
 | `full`    | Complete Apache release + native overlay | Entire official distribution |
 
-Scheduled builds (`Check Hadoop Releases`) use **`native`** only (no Apache tarball download).
+Scheduled builds (`Check Hadoop Releases`) publish **`native`** + **`full`** for every missing version ≥ `3.4.0`, strictly **one build at a time** (never parallel), with **no per-day cap** (5 missing → 5 builds in the same run).
 
 Manual builds can choose the mode in the **Build Windows Native** workflow. Release tags are suffixed so variants do not overwrite each other:
 
@@ -95,7 +95,7 @@ Register the runner with labels `self-hosted`, `Windows`, `X64`.
 2. Choose **package mode** (`native`, `tarball`, or `full`)
 3. Download the artifact or the **GitHub Release** (tag depends on mode, see table above)
 
-**Check Hadoop Releases** (daily cron): detects new Apache versions and triggers **`native`** builds for missing `hadoop-<version>` release tags.
+**Check Hadoop Releases** (daily cron): re-scans Apache releases ≥ `3.4.0`, enqueues every missing tag (`hadoop-<version>` + `hadoop-<version>-full`), builds them **sequentially** until done. A interrupted run resumes the next day with whatever is still missing.
 
 ## Hadoop versions
 

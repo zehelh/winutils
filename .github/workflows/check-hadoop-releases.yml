@@ -1,22 +1,24 @@
-# Poll Apache Hadoop releases and trigger native Windows builds for missing versions.
+# Poll Apache Hadoop releases and build missing GitHub Releases (native + full, sequential).
+# Each run: list ALL missing tags since min_version, then build one after another (never parallel).
 name: Check Hadoop Releases
 
 on:
   schedule:
-    # Daily at 06:00 UTC
+    # Daily at 06:00 UTC — re-check every version >= min_version, enqueue all missing native + full builds.
     - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       min_version:
-        description: Minimum Hadoop version to consider (semver)
+        description: Minimum Hadoop version (every Apache release >= this must have native + full tags)
         required: true
         default: "3.4.0"
         type: string
-      max_builds:
-        description: Max new builds to trigger per run
+      package_modes:
+        description: Comma-separated modes to publish (default native + full)
         required: true
-        default: "1"
+        default: "native,full"
         type: string
+
 permissions:
   contents: write
   actions: write
@@ -25,34 +27,34 @@ jobs:
   detect:
     runs-on: ubuntu-latest
     outputs:
-      versions: ${{ steps.detect.outputs.versions }}
+      items: ${{ steps.detect.outputs.items }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Detect unpublished Hadoop releases
+      - name: Detect missing GitHub Releases
         id: detect
         env:
           GH_TOKEN: ${{ github.token }}
           MIN_VERSION: ${{ inputs.min_version || '3.4.0' }}
-          MAX_BUILDS: ${{ inputs.max_builds || '1' }}
+          PACKAGE_MODES: ${{ inputs.package_modes || 'native,full' }}
         run: |
           chmod +x scripts/detect-hadoop-releases.sh
-          versions="$(bash scripts/detect-hadoop-releases.sh)"
-          echo "versions=${versions}" >> "${GITHUB_OUTPUT}"
-          echo "Pending builds: ${versions}"
+          items="$(bash scripts/detect-hadoop-releases.sh)"
+          echo "items=${items}" >> "${GITHUB_OUTPUT}"
+          echo "Pending builds (sequential, no daily cap): ${items}"
 
   build:
     needs: detect
-    if: needs.detect.outputs.versions != '[]'
+    if: needs.detect.outputs.items != '[]'
     strategy:
       fail-fast: false
       max-parallel: 1
       matrix:
-        version: ${{ fromJson(needs.detect.outputs.versions) }}
+        include: ${{ fromJson(needs.detect.outputs.items) }}
     uses: ./.github/workflows/build-windows-native.yml
     with:
       hadoop_version: ${{ matrix.version }}
-      package_mode: native
+      package_mode: ${{ matrix.package_mode }}
       create_release: true
     secrets: inherit

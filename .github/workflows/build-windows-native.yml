@@ -71,21 +71,7 @@ jobs:
         run: |
           & "${{ github.workspace }}/scripts/setup-windows-runner.ps1" -ExportToGitHubEnv
 
-      - name: Cache Maven repository
-        uses: actions/cache@v4
-        with:
-          path: H:/m2/repository
-          key: maven-win-h-${{ hashFiles('scripts/build-windows-native.sh', 'versions.conf') }}
-          restore-keys: |
-            maven-win-h-
-
-      - name: Cache vcpkg
-        uses: actions/cache@v4
-        with:
-          path: H:/vcpkg
-          key: vcpkg-win-h-2026.06.24-${{ hashFiles('scripts/build-windows-native.sh', 'scripts/build-hdfs-dll-native.sh') }}
-          restore-keys: |
-            vcpkg-win-h-
+      # Maven (H:/m2) and vcpkg (H:/vcpkg) persist on the self-hosted runner — no GHA cache (avoids multi-GB post-step hangs).
 
       - name: Cache Hadoop release tarballs
         if: inputs.package_mode == 'tarball' || inputs.package_mode == 'full'

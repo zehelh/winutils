@@ -1,7 +1,8 @@
 # Install Apache Maven into RUNNER_TOOL_CACHE (or .cache) if not on PATH.
+# Hadoop 3.4.x uses maven-enforcer-plugin 3.0.0 which breaks on Maven 3.9.7+ (MENFORCER-503).
 #Requires -Version 5.1
 param(
-    [string]$MavenVersion = "3.9.9",
+    [string]$MavenVersion = "3.9.6",
     [switch]$ExportToGitHubEnv
 )
 
@@ -11,9 +12,21 @@ if (-not $_this) { throw "Run via setup-windows-runner.ps1 or build-windows-nati
 . (Join-Path (Split-Path -Path $_this -Parent) "ps-paths.ps1")
 Initialize-WinutilsPaths -CallerPath $_this
 
-if (Get-Command mvn.cmd -ErrorAction SilentlyContinue) {
-    Write-Host "[maven] Already on PATH: $(mvn -version | Select-Object -First 1)"
+function Get-MavenVersionString {
+    if (-not (Get-Command mvn.cmd -ErrorAction SilentlyContinue)) { return $null }
+    $line = cmd /c "mvn -version 2>&1 & exit /b 0" | Select-String 'Apache Maven' | Select-Object -First 1
+    if ($line -match 'Apache Maven (\d+\.\d+\.\d+)') { return $matches[1] }
+    return $null
+}
+
+$onPathVer = Get-MavenVersionString
+if ($onPathVer -and ([version]$onPathVer -lt [version]"3.9.7")) {
+    Write-Host "[maven] Already on PATH: Apache Maven $onPathVer (compatible with Hadoop enforcer)"
     return
+}
+if ($onPathVer) {
+    Write-Host "[maven] Maven $onPathVer on PATH is incompatible with Hadoop 3.4.x (enforcer NPE on 3.9.7+)"
+    Write-Host "[maven] Using bundled Maven $MavenVersion instead"
 }
 
 $repoRoot = $script:WinutilsRepoRoot
